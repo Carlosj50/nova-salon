@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Agenda | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Trabajo diario</p>
+          <h1>Agenda</h1>
+          <p class="subtitle">Hoy: {{ today_display }}. Lo urgente primero, sin rodeos.</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% if saved %}
+        <div class="notice">Cita guardada correctamente.</div>
+      {% endif %}
+
+      <section class="summary-strip" aria-label="Resumen rápido">
+        <div class="summary-item">
+          <span>Hoy</span>
+          <strong>{{ summary.today }}</strong>
+        </div>
+        <div class="summary-item">
+          <span>Pendientes</span>
+          <strong>{{ summary.pending }}</strong>
+        </div>
+        <div class="summary-item">
+          <span>Confirmadas</span>
+          <strong>{{ summary.confirmed }}</strong>
+        </div>
+        <div class="summary-item">
+          <span>Activas</span>
+          <strong>{{ summary.active }}</strong>
+        </div>
+      </section>
+
+      <section class="ops-strip" aria-label="Atención operativa del día">
+        <article class="ops-card ops-card-attention">
+          <div class="ops-card-head">
+            <div>
+              <p class="eyebrow">Atención ahora</p>
+              <h2>{% if operational_focus.is_today %}Lo que pide acción hoy{% else %}Lo que pide acción en {{ operational_focus.target_date_display }}{% endif %}</h2>
+            </div>
+            <span class="ops-badge {% if operational_focus.pending_count %}is-alert{% endif %}">
+              {{ operational_focus.pending_count }} pendiente{% if operational_focus.pending_count != 1 %}s{% endif %}
+            </span>
+          </div>
+          {% if operational_focus.attention_items %}
+            <div class="ops-list">
+              {% for item in operational_focus.attention_items %}
+                <div class="ops-list-item">
+                  <div class="ops-list-copy">
+                    <strong>{{ item.hora }} · {{ item.cliente_nombre }}</strong>
+                    <span>{{ item.servicio }}</span>
+                  </div>
+                  <div class="ops-list-actions">
+                    <form method="post" action="{{ item.confirm_href }}">
+                      <button type="submit" class="quick-primary">Confirmar</button>
+                    </form>
+                    <a class="button-link compact-button" href="{{ item.edit_href }}">Editar</a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="ops-empty">Ahora mismo no hay pendientes por resolver en esa fecha.</p>
+          {% endif %}
+        </article>
+
+        <article class="ops-card">
+          <div class="ops-card-head">
+            <div>
+              <p class="eyebrow">Siguiente cita</p>
+              <h2>Qué viene a continuación</h2>
+            </div>
+            <span class="ops-badge">{{ operational_focus.active_count }} activa{% if operational_focus.active_count != 1 %}s{% endif %}</span>
+          </div>
+          {% if operational_focus.next_item %}
+            <div class="ops-next">
+              <strong>{{ operational_focus.next_item.fecha_display }} · {{ operational_focus.next_item.hora }}</strong>
+              <p>{{ operational_focus.next_item.cliente_nombre }} · {{ operational_focus.next_item.servicio }}</p>
+              <div class="ops-inline-links">
+                <a class="button-link compact-button" href="{{ operational_focus.next_item.edit_href }}">Abrir cita</a>
+                <a class="button-link compact-button" href="{{ operational_focus.next_item.customer_href }}">Ver cliente</a>
+                {% if operational_focus.next_item.estado == 'pendiente' %}
+                  <form method="post" action="{{ operational_focus.next_item.confirm_href }}">
+                    <button type="submit" class="quick-primary">Confirmar</button>
+                  </form>
+                {% elif operational_focus.next_item.estado == 'confirmada' %}
+                  <form method="post" action="{{ operational_focus.next_item.complete_href }}">
+                    <button type="submit" class="button-success">Completar</button>
+                  </form>
+                {% endif %}
+              </div>
+            </div>
+          {% else %}
+            <p class="ops-empty">No hay citas activas en la agenda visible. Buen momento para revisar huecos o apuntar una nueva.</p>
+          {% endif %}
+        </article>
+
+        <article class="ops-card ops-card-actions">
+          <div class="ops-card-head">
+            <div>
+              <p class="eyebrow">Acciones rápidas</p>
+              <h2>Qué conviene hacer ya</h2>
+            </div>
+          </div>
+          <div class="ops-action-grid">
+            <a class="button-link button-link-primary" href="/citas/nueva?return_to={{ current_path|urlencode }}{% if focus_date %}&fecha={{ focus_date }}{% endif %}">Nueva cita</a>
+            <a class="button-link" href="/agenda?filtro=pendientes{% if month_overview.month_token %}&mes={{ month_overview.month_token }}{% endif %}">Ver pendientes</a>
+            <a class="button-link" href="/agenda">Ir a hoy</a>
+            {% for view in agenda_views %}
+              {% if not view.active %}
+                <a class="button-link" href="{{ view.href }}">{{ view.label }}</a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </article>
+      </section>
+
+      <section class="filter-strip" aria-label="Filtros rápidos de agenda">
+        {% for filter in agenda_filters %}
+          <a
+            class="filter-chip {% if filter.active %}active{% endif %}"
+            href="{{ filter.href }}"
+          >{{ filter.label }}</a>
+        {% endfor %}
+      </section>
+
+      <section class="month-panel" aria-label="Calendario mensual">
+        <div class="month-panel-head">
+          <div>
+            <h2>Vista mensual</h2>
+            <p>Un vistazo rápido para ver carga por día y entrar directo a esa fecha.</p>
+          </div>
+          <div class="month-nav">
+            <a class="button-link compact-button" href="{{ month_overview.prev_href }}">Anterior</a>
+            <strong>{{ month_overview.label }}</strong>
+            <a class="button-link compact-button" href="{{ month_overview.next_href }}">Siguiente</a>
+          </div>
+        </div>
+        <div class="month-weekdays" aria-hidden="true">
+          <span>Lun</span>
+          <span>Mar</span>
+          <span>Mié</span>
+          <span>Jue</span>
+          <span>Vie</span>
+          <span>Sáb</span>
+          <span>Dom</span>
+        </div>
+        <div class="month-grid">
+          {% for week in month_overview.weeks %}
+            {% for day in week %}
+              {% if day %}
+                <a
+                  class="month-day {% if day.is_today %}is-today{% endif %} {% if day.is_selected %}is-selected{% endif %} {% if day.has_items %}has-items{% endif %} {% if day.count >= 4 %}is-busy{% elif day.count >= 2 %}is-loaded{% endif %}"
+                  href="{{ day.href }}"
+                >
+                  <span class="month-day-number">{{ day.label }}</span>
+                  <span class="month-day-meta">
+                    {% if day.count %}
+                      {{ day.count }} cita{% if day.count != 1 %}s{% endif %}
+                    {% else %}
+                      Libre
+                    {% endif %}
+                  </span>
+                </a>
+              {% else %}
+                <span class="month-day month-day-empty" aria-hidden="true"></span>
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+        </div>
+        {% if focus_date %}
+          <div class="month-focus">
+            <span>Viendo: <strong>{{ focus_date_display }}</strong></span>
+            <a class="button-link compact-button" href="{{ month_overview.clear_href }}">Ver mes completo</a>
+          </div>
+        {% endif %}
+      </section>
+
+      <section class="view-switch" aria-label="Cambiar vista de agenda">
+        <div class="view-switch-copy">
+          <strong>Vista actual: lista</strong>
+          <span>Útil para revisar rápido, buscar y cambiar estados en bloque.</span>
+        </div>
+        <div class="filter-strip compact-filter-strip">
+          {% for view in agenda_views %}
+            <a class="filter-chip {% if view.active %}active{% endif %}" href="{{ view.href }}">{{ view.label }}</a>
+          {% endfor %}
+        </div>
+      </section>
+
+      {% macro appointments_table(items) %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Hora</th>
+                <th>Cliente</th>
+                <th>Teléfono</th>
+                <th>Servicio</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for appointment in items %}
+                <tr
+                  data-search="{{ appointment.search_text }}"
+                  class="{% if appointment.estado == 'pendiente' and appointment.fecha == operational_focus.target_date %}row-needs-attention{% elif appointment.fecha == operational_focus.target_date %}row-in-focus{% endif %}"
+                >
+                  <td>
+                    <strong>{{ appointment.fecha_display }}</strong>
+                    {% if appointment.franja %}
+                      <span class="cell-note">{{ appointment.franja }}</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ appointment.hora }}</td>
+                  <td><a href="/clientes/{{ appointment.cliente_id }}">{{ appointment.cliente_nombre }}</a></td>
+                  <td>{{ appointment.cliente_telefono }}</td>
+                  <td>{{ appointment.servicio }}</td>
+                  <td><span class="badge state-{{ appointment.estado }}">{{ appointment.estado }}</span></td>
+                  <td>
+                    <div class="status-actions">
+                      <a class="button-link compact-button" href="/citas/{{ appointment.id }}/editar?return_to={{ current_path|urlencode }}">Editar</a>
+                      {% if appointment.actions %}
+                        {% for state, label in appointment.actions %}
+                          <form method="post" action="/citas/{{ appointment.id }}/estado?estado={{ state }}&return_to={{ current_path|urlencode }}">
+                            <button
+                              type="submit"
+                              class="{% if state == 'confirmada' %}quick-primary{% elif state == 'completada' %}button-success{% elif state == 'cancelada' %}button-danger{% else %}button-neutral{% endif %}"
+                            >{{ label }}</button>
+                          </form>
+                        {% endfor %}
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endmacro %}
+
+      <section class="table-panel" aria-label="Agenda de hoy">
+        <div class="section-heading">
+          <div>
+            <h2>{% if focus_date %}Citas del día{% else %}Citas de hoy{% endif %}</h2>
+            <p>{% if focus_date %}Detalle de {{ focus_date_display }}.{% else %}Lo que necesita atención durante la jornada.{% endif %}</p>
+          </div>
+          <div class="section-tools">
+            <label class="search-box section-search">
+              <span class="sr-only">Filtrar citas de la agenda</span>
+              <input id="agenda-search" type="search" placeholder="Filtrar citas por clienta, teléfono o servicio" autocomplete="off">
+            </label>
+            <div class="section-toolbar-row">
+              <span class="toolbar-note">{{ appointments|length }} citas visibles</span>
+              <div class="panel-actions">
+                <a class="button-link button-link-primary" href="/citas/nueva?return_to={{ current_path|urlencode }}{% if focus_date %}&fecha={{ focus_date }}{% endif %}">Nueva cita</a>
+                <a class="button-link" href="/">Abrir chat demo</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% if today_appointments %}
+          {{ appointments_table(today_appointments) }}
+          <p class="empty-inline" data-empty-search hidden>No hay citas con ese cliente, teléfono o servicio.</p>
+        {% else %}
+          <div class="empty-state compact-empty">
+            <h2>No hay citas para mostrar</h2>
+            <p>Prueba otro filtro o registra una nueva cita.</p>
+          </div>
+        {% endif %}
+      </section>
+
+      {% if not focus_date %}
+      <section class="table-panel spaced-panel" aria-label="Resto de citas">
+        <div class="section-heading">
+          <div>
+            <h2>Próximas y recientes</h2>
+            <p>Vista completa para revisar sin cambiar de pantalla.</p>
+          </div>
+        </div>
+        {% if other_appointments %}
+          {{ appointments_table(other_appointments) }}
+          <p class="empty-inline" data-empty-search hidden>No hay más coincidencias con esa búsqueda.</p>
+        {% else %}
+          <div class="empty-state compact-empty">
+            <h2>No hay más citas</h2>
+            <p>Con el filtro actual no aparecen más resultados.</p>
+          </div>
+        {% endif %}
+      </section>
+      {% endif %}
+    </main>
+
+    <script>
+      const agendaSearch = document.querySelector("#agenda-search");
+      const appointmentSections = document.querySelectorAll(".table-panel");
+
+      if (agendaSearch) {
+        agendaSearch.addEventListener("input", () => {
+          const term = agendaSearch.value.trim().toLowerCase();
+
+          appointmentSections.forEach((section) => {
+            const rows = section.querySelectorAll("tbody tr[data-search]");
+            if (!rows.length) return;
+
+            let visibleRows = 0;
+            rows.forEach((row) => {
+              const matches = row.dataset.search.includes(term);
+              row.hidden = !matches;
+              if (matches) visibleRows += 1;
+            });
+
+            const emptyMessage = section.querySelector("[data-empty-search]");
+            if (emptyMessage) {
+              emptyMessage.hidden = visibleRows > 0;
+            }
+          });
+        });
+      }
+    </script>
+  </body>
+</html>

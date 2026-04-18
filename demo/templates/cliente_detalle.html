@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ customer.nombre }} | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Ficha de cliente</p>
+          <h1>{{ customer.nombre }}</h1>
+          <p class="subtitle">{{ customer.telefono }} · Alta: {{ customer.fecha_alta_display }}</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% if saved %}
+        <div class="notice">Cita guardada para este cliente.</div>
+      {% endif %}
+      {% if updated %}
+        <div class="notice">Ficha de cliente actualizada.</div>
+      {% endif %}
+
+      <p class="back-row"><a class="inline-link" href="/clientes">← Volver a clientes</a></p>
+
+      <section class="detail-grid">
+        <article class="info-panel">
+          <h2>Datos básicos</h2>
+          <dl>
+            <div>
+              <dt>Nombre</dt>
+              <dd>{{ customer.nombre }}</dd>
+            </div>
+            <div>
+              <dt>Teléfono</dt>
+              <dd>{{ customer.telefono }}</dd>
+            </div>
+            <div>
+              <dt>Email</dt>
+              <dd>{{ customer.email or "No registrado" }}</dd>
+            </div>
+            <div>
+              <dt>Última visita</dt>
+              <dd>{{ customer.ultima_visita_display }}</dd>
+            </div>
+            <div>
+              <dt>Notas</dt>
+              <dd>{{ customer.notas or "Sin notas" }}</dd>
+            </div>
+          </dl>
+          <div class="panel-actions">
+            <a class="button-link button-link-primary" href="/citas/nueva?customer_id={{ customer.id }}&return_to=/clientes/{{ customer.id }}">Nueva cita</a>
+            <a class="button-link" href="/clientes/{{ customer.id }}/editar">Editar cliente</a>
+          </div>
+        </article>
+
+        <article class="table-panel">
+          <div class="section-heading">
+            <div>
+              <h2>Historial de citas</h2>
+              <p>Reserva una nueva cita sin volver a elegir al cliente.</p>
+            </div>
+            <a class="button-link button-link-primary" href="/citas/nueva?customer_id={{ customer.id }}&return_to=/clientes/{{ customer.id }}">Nueva cita para este cliente</a>
+          </div>
+          {% if appointments %}
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Hora</th>
+                    <th>Franja</th>
+                    <th>Servicio</th>
+                    <th>Estado</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for appointment in appointments %}
+                    <tr>
+                      <td>{{ appointment.fecha_display }}</td>
+                      <td>{{ appointment.hora }}</td>
+                      <td>{{ appointment.franja or "—" }}</td>
+                      <td>{{ appointment.servicio }}</td>
+                      <td><span class="badge state-{{ appointment.estado }}">{{ appointment.estado }}</span></td>
+                      <td>
+                        <div class="status-actions">
+                          <a class="button-link compact-button" href="/citas/{{ appointment.id }}/editar?return_to=/clientes/{{ customer.id }}">Editar</a>
+                          <a
+                            class="button-link compact-button"
+                            href="/citas/nueva?customer_id={{ customer.id }}{% if appointment.servicio_id %}&servicio_id={{ appointment.servicio_id }}{% endif %}{% if appointment.hora %}&hora={{ appointment.hora }}{% endif %}&return_to=/clientes/{{ customer.id }}"
+                          >Repetir</a>
+                          {% if appointment.actions %}
+                            {% for state, label in appointment.actions %}
+                              <form method="post" action="/citas/{{ appointment.id }}/estado?estado={{ state }}&return_to=/clientes/{{ customer.id }}">
+                                <button
+                                  type="submit"
+                                  class="{% if state == 'confirmada' %}quick-primary{% elif state == 'completada' %}button-success{% elif state == 'cancelada' %}button-danger{% else %}button-neutral{% endif %}"
+                                >{{ label }}</button>
+                              </form>
+                            {% endfor %}
+                          {% endif %}
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="muted">Este cliente todavía no tiene citas registradas.</p>
+          {% endif %}
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

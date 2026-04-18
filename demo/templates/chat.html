@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ business.name }} | Asistente de citas</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="chat-panel" aria-label="Chat de atención al cliente">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow">Asistente de reservas</p>
+            <h1>{{ business.name }}</h1>
+            <p class="subtitle">{{ business.sector }} · {{ business.hours.summary }}</p>
+          </div>
+          <div class="header-actions">
+            {% include "_nav.html" %}
+            {% if whatsapp_channel and whatsapp_channel.activo and whatsapp_channel.whatsapp_url %}
+              <a href="{{ whatsapp_channel.whatsapp_url }}" target="_blank" rel="noreferrer">Contacto WhatsApp</a>
+            {% endif %}
+            <span class="status">En línea</span>
+          </div>
+        </header>
+
+        <div id="messages" class="messages" aria-live="polite">
+          <article class="message bot">
+            <div class="bubble">{{ business.messages.welcome }}</div>
+          </article>
+        </div>
+
+        <div class="quick-actions" aria-label="Preguntas rápidas">
+          <button type="button" data-message="¿Qué horario tienen?">Horario</button>
+          <button type="button" data-message="¿Hacéis corte de caballero?">Servicios</button>
+          <button type="button" data-message="¿Precio del tinte?">Precios</button>
+          <button type="button" data-message="Quiero cita para mañana por la tarde">Pedir cita</button>
+        </div>
+
+        <form id="chat-form" class="chat-form">
+          <label class="sr-only" for="message">Mensaje</label>
+          <input
+            id="message"
+            name="message"
+            type="text"
+            autocomplete="off"
+            placeholder="Escribe tu pregunta o pide una cita"
+            required
+          >
+          <button type="submit">Enviar</button>
+        </form>
+      </section>
+    </main>
+
+    <script>
+      const form = document.querySelector("#chat-form");
+      const input = document.querySelector("#message");
+      const messages = document.querySelector("#messages");
+      const quickActions = document.querySelectorAll("[data-message]");
+      const urlParams = new URLSearchParams(window.location.search);
+      const channel = urlParams.get("channel");
+      const incomingPhone = urlParams.get("incoming_phone");
+      const sessionStorageKey = channel === "whatsapp" && incomingPhone
+        ? `demo_chat_session_id_whatsapp_${incomingPhone}`
+        : "demo_chat_session_id";
+      let sessionId = localStorage.getItem(sessionStorageKey);
+
+      function addMessage(text, type) {
+        const item = document.createElement("article");
+        item.className = `message ${type}`;
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.textContent = text;
+        item.appendChild(bubble);
+        messages.appendChild(item);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      async function sendMessage(text) {
+        const message = text.trim();
+        if (!message) return;
+
+        addMessage(message, "user");
+        input.value = "";
+        form.querySelector("button").disabled = true;
+
+        try {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message,
+              session_id: sessionId,
+              channel,
+              incoming_phone: incomingPhone
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error("Error al contactar con la demo");
+          }
+
+          const data = await response.json();
+          sessionId = data.session_id;
+          localStorage.setItem(sessionStorageKey, sessionId);
+          addMessage(data.reply, "bot");
+        } catch (error) {
+          addMessage("No he podido responder ahora mismo. Revisa que la demo esté arrancada.", "bot");
+        } finally {
+          form.querySelector("button").disabled = false;
+          input.focus();
+        }
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        sendMessage(input.value);
+      });
+
+      quickActions.forEach((button) => {
+        button.addEventListener("click", () => sendMessage(button.dataset.message));
+      });
+    </script>
+  </body>
+</html>

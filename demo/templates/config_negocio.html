@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Negocio | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Configuración</p>
+          <h1>{{ page_title }}</h1>
+          <p class="subtitle">{{ page_subtitle }}</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% include "_config_nav.html" %}
+
+      {% if saved %}
+        <div class="notice">Datos del negocio guardados.</div>
+      {% endif %}
+      {% if error %}
+        <div class="notice notice-error">{{ error }}</div>
+      {% endif %}
+
+      <section class="detail-grid">
+        <form class="form-panel" method="post" action="{{ form_action }}">
+          <h2>Ajustes rápidos</h2>
+
+          <div class="compact-form-grid">
+            <label>
+              <span>Nombre del negocio</span>
+              <input name="name" type="text" value="{{ form_data.name }}" placeholder="Peluquería Nova">
+            </label>
+
+            <label>
+              <span>Sector</span>
+              <input name="sector" type="text" value="{{ form_data.sector }}" placeholder="peluquería y estética">
+            </label>
+          </div>
+
+          <div class="compact-form-grid">
+            <label>
+              <span>Teléfono principal</span>
+              <input name="phone" type="text" value="{{ form_data.phone }}" placeholder="+34 928 123 456">
+            </label>
+
+            <label>
+              <span>Dirección</span>
+              <input name="address" type="text" value="{{ form_data.address }}" placeholder="Calle Principal 24, Las Palmas">
+            </label>
+          </div>
+
+          <label>
+            <span>Resumen de horarios</span>
+            <input name="hours_summary" type="text" value="{{ form_data.hours_summary }}" placeholder="lunes a viernes de 9:30 a 19:30 y sábados de 10:00 a 14:00">
+          </label>
+
+          <div class="compact-form-grid">
+            <label>
+              <span>Lunes a viernes</span>
+              <input name="hours_monday_friday" type="text" value="{{ form_data.hours_monday_friday }}" placeholder="09:30-19:30">
+            </label>
+
+            <label>
+              <span>Sábado</span>
+              <input name="hours_saturday" type="text" value="{{ form_data.hours_saturday }}" placeholder="10:00-14:00 o cerrado">
+            </label>
+          </div>
+
+          <label>
+            <span>Domingo</span>
+            <input name="hours_sunday" type="text" value="{{ form_data.hours_sunday }}" placeholder="cerrado">
+          </label>
+
+          <label>
+            <span>Saludo base del chat</span>
+            <textarea name="welcome_message" rows="3" placeholder="Hola, soy el asistente...">{{ form_data.welcome_message }}</textarea>
+          </label>
+
+          <label>
+            <span>Mensaje cuando no entiende algo</span>
+            <textarea name="fallback_message" rows="3" placeholder="Puedo ayudarte con horarios, servicios...">{{ form_data.fallback_message }}</textarea>
+          </label>
+
+          <div class="form-actions">
+            <button class="primary-button" type="submit">{{ submit_label }}</button>
+            <a class="button-link" href="/config">Volver al centro</a>
+          </div>
+        </form>
+
+        <aside class="info-panel">
+          <h2>Qué editas aquí</h2>
+          <dl>
+            <div>
+              <dt>Nombre</dt>
+              <dd>{{ business.name }}</dd>
+            </div>
+            <div>
+              <dt>Teléfono</dt>
+              <dd>{{ business.phone }}</dd>
+            </div>
+            <div>
+              <dt>Horario corto</dt>
+              <dd>{{ business.hours.summary }}</dd>
+            </div>
+            <div>
+              <dt>Saludo del chat</dt>
+              <dd>{{ business.messages.welcome }}</dd>
+            </div>
+          </dl>
+          <p class="panel-copy">
+            Aquí va lo básico del salón: datos visibles, horarios y mensajes base. Si necesitas catálogo, equipo o WhatsApp, lo tienes enlazado arriba sin salir del bloque de configuración.
+          </p>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

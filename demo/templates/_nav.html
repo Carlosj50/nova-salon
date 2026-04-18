@@ -1,0 +1,13 @@
+<nav class="top-nav" aria-label="Navegación interna">
+  <a href="/agenda" class="{% if active_page == 'agenda' %}active{% endif %}">Agenda</a>
+  <a href="/clientes" class="{% if active_page == 'clientes' %}active{% endif %}">Clientes</a>
+  <a href="/servicios" class="{% if active_page == 'services' %}active{% endif %}">Servicios</a>
+  <a href="/personal" class="{% if active_page == 'personal' %}active{% endif %}">Personal</a>
+  <a href="/config" class="{% if active_page == 'config' %}active{% endif %}">Configuración</a>
+  <a href="/" class="{% if active_page == 'chat' %}active{% endif %}">Chat demo</a>
+  {% if request.session.get("is_authenticated") %}
+    <a href="/logout" class="{% if active_page == 'logout' %}active{% endif %}">Salir</a>
+  {% else %}
+    <a href="/login" class="{% if active_page == 'login' %}active{% endif %}">Entrar</a>
+  {% endif %}
+</nav>

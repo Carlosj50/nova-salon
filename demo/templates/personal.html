@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Personal | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Configuración</p>
+          <h1>Personal</h1>
+          <p class="subtitle">Quién trabaja, qué categorías puede atender y capacidad orientativa por categoría.</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% include "_config_nav.html" %}
+
+      {% if saved %}
+        <div class="notice">Datos de personal guardados correctamente.</div>
+      {% endif %}
+      {% if capacity_saved %}
+        <div class="notice">Capacidad por categoría actualizada.</div>
+      {% endif %}
+
+      <section class="table-panel">
+        <div class="section-heading">
+          <div>
+            <h2>Categorías y capacidad</h2>
+            <p>Base simple para preparar la disponibilidad real más adelante.</p>
+          </div>
+        </div>
+        <form class="inline-capacity-form" method="post" action="/personal/capacidad">
+          <div class="summary-strip">
+            {% for category in category_summary %}
+              <div class="summary-item">
+                <span>{{ category.name }}</span>
+                <strong>{{ category.active_staff_count }} activas</strong>
+                <label class="inline-number-field">
+                  Capacidad
+                  <input type="number" min="0" name="capacity_{{ category.id }}" value="{{ category.capacity }}">
+                </label>
+              </div>
+            {% endfor %}
+          </div>
+          <div class="panel-actions">
+            <button class="primary-button" type="submit">Guardar capacidad</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="table-panel spaced-panel">
+        <div class="section-heading">
+          <div>
+            <h2>Equipo</h2>
+            <p>{{ staff_members|length }} personas configuradas.</p>
+          </div>
+          <div class="panel-actions">
+            <a class="button-link button-link-primary" href="/personal/nuevo">Nueva persona</a>
+          </div>
+        </div>
+
+        {% if staff_members %}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Rol</th>
+                  <th>Categorías</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for member in staff_members %}
+                  <tr>
+                    <td><strong>{{ member.name }}</strong></td>
+                    <td>{{ member.role or "—" }}</td>
+                    <td>{{ member.categories_display }}</td>
+                    <td><span class="badge {% if member.active %}state-confirmada{% else %}state-cancelada{% endif %}">{{ member.active_label }}</span></td>
+                    <td>
+                      <div class="status-actions">
+                        <a class="button-link compact-button" href="/personal/{{ member.id }}/editar">Editar</a>
+                        <form method="post" action="/personal/{{ member.id }}/activo?activo={% if member.active %}0{% else %}1{% endif %}">
+                          <button type="submit" class="{% if member.active %}button-danger{% else %}button-success{% endif %}">
+                            {% if member.active %}Desactivar{% else %}Activar{% endif %}
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="empty-state">
+            <h2>No hay personal configurado todavía</h2>
+            <p>Añade quién trabaja y qué categorías puede atender.</p>
+            <a class="button-link button-link-primary" href="/personal/nuevo">Crear persona</a>
+          </div>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>

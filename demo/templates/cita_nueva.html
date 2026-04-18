@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }} | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Agenda</p>
+          <h1>{{ page_title }}</h1>
+          <p class="subtitle">{{ page_subtitle }}</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      <p class="back-row"><a class="inline-link" href="{{ form_data.return_to or '/agenda' }}">← Volver</a></p>
+
+      {% if error %}
+        <div class="notice notice-error">{{ error }}</div>
+      {% endif %}
+
+      <section class="detail-grid">
+        <form class="form-panel" method="post" action="{{ form_action }}">
+          <h2>Datos de la cita</h2>
+          <input type="hidden" name="return_to" value="{{ form_data.return_to or '/agenda' }}">
+
+          {% if selected_customer %}
+            <input type="hidden" name="customer_id" value="{{ selected_customer.id }}">
+            <div class="locked-card">
+              <strong>{{ selected_customer.nombre }}</strong>
+              <span>{{ selected_customer.telefono }}</span>
+            </div>
+          {% else %}
+            <label>
+              <span>Buscar cliente</span>
+              <input id="customer-filter" type="search" placeholder="Escribe nombre o teléfono para filtrar la lista" autocomplete="off">
+              <span class="field-note">Filtra la lista y quédate con el cliente correcto sin recorrer todo el desplegable.</span>
+            </label>
+
+            <label>
+              <span>Cliente existente</span>
+              <select id="customer-select" name="customer_id">
+                <option value="">Elegir cliente...</option>
+                {% for customer in customers %}
+                  <option value="{{ customer.id }}" data-search="{{ customer.search_text }}" {% if form_data.customer_id == customer.id|string %}selected{% endif %}>
+                    {{ customer.nombre }} · {{ customer.telefono }}
+                  </option>
+                {% endfor %}
+              </select>
+            </label>
+
+            <div class="inline-separator"><span>o dar de alta rápido</span></div>
+
+            <label>
+              <span>Nombre</span>
+              <input name="nombre" type="text" value="{{ form_data.nombre or '' }}" placeholder="Nombre del cliente">
+            </label>
+
+            <label>
+              <span>Teléfono</span>
+              <input name="telefono" type="text" value="{{ form_data.telefono or '' }}" placeholder="600 123 123">
+              <span class="field-note">Si ese teléfono ya existe, usaré la ficha existente para evitar duplicados.</span>
+            </label>
+          {% endif %}
+
+          <label>
+            <span>Servicio</span>
+            <select name="servicio_id" required>
+              <option value="">Elegir servicio...</option>
+              {% for service in services %}
+                <option value="{{ service.id }}" {% if form_data.servicio_id == service.id %}selected{% endif %}>
+                  {{ service.name }} · {{ service.duration }} · {{ service.price }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <div class="compact-form-grid">
+            <label>
+              <span>Fecha</span>
+              <input id="appointment-date" name="fecha" type="date" value="{{ form_data.fecha or '' }}" required>
+            </label>
+
+            <label>
+              <span>Hora</span>
+              <input name="hora" type="time" value="{{ form_data.hora or '' }}" required>
+            </label>
+          </div>
+
+          <div class="quick-flow-bar" aria-label="Atajos de fecha y hora">
+            <span class="quick-flow-title">Ajustes rápidos</span>
+            <div class="quick-flow-actions">
+              <button type="button" data-shift-days="1">Mañana</button>
+              <button type="button" data-shift-days="7">+7 días</button>
+              <button type="button" data-shift-minutes="30">+30 min</button>
+              <button type="button" data-shift-minutes="60">+1 h</button>
+            </div>
+          </div>
+
+          <section class="calendar-box" aria-label="Calendario de cita">
+            <div class="calendar-head">
+              <button id="calendar-prev" class="calendar-nav" type="button" aria-label="Mes anterior">‹</button>
+              <strong id="calendar-title">Calendario</strong>
+              <button id="calendar-next" class="calendar-nav" type="button" aria-label="Mes siguiente">›</button>
+            </div>
+
+            <div class="calendar-weekdays" aria-hidden="true">
+              <span>L</span>
+              <span>M</span>
+              <span>X</span>
+              <span>J</span>
+              <span>V</span>
+              <span>S</span>
+              <span>D</span>
+            </div>
+
+            <div id="calendar-grid" class="calendar-grid"></div>
+
+            <div class="calendar-shortcuts">
+              <button type="button" data-offset-days="0">Hoy</button>
+              <button type="button" data-offset-days="1">Mañana</button>
+              <button type="button" data-offset-days="7">+7 días</button>
+              <button type="button" data-offset-days="20">+20 días</button>
+            </div>
+          </section>
+
+          <label>
+            <span>{% if mode == "edit" %}Estado{% else %}Estado inicial{% endif %}</span>
+            <select name="estado">
+              {% for state in appointment_states %}
+                <option value="{{ state }}" {% if form_data.estado == state %}selected{% endif %}>{{ state }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>
+            <span>Notas</span>
+            <textarea name="notas" rows="3" placeholder="Opcional">{{ form_data.notas or '' }}</textarea>
+          </label>
+
+          <div class="panel-actions">
+            <button class="primary-button" type="submit">{{ submit_label }}</button>
+            <a class="button-link" href="{{ form_data.return_to or '/agenda' }}">Cancelar</a>
+          </div>
+        </form>
+
+        <aside class="info-panel">
+          <h2>Uso rápido</h2>
+          <p class="panel-copy">
+            {% if mode == "edit" %}
+              Corrige la cita y guarda. El cliente ya está fijado para que mover fecha, hora o servicio sea rápido.
+            {% else %}
+              Si el cliente ya existe, selecciónalo y guarda. Si no existe, rellena nombre y teléfono
+              en esta misma pantalla.
+            {% endif %}
+          </p>
+          <p class="panel-copy">
+            {% if mode == "edit" %}
+              Puedes ajustar fecha, hora, servicio, estado y notas sin rehacer la cita.
+            {% else %}
+              Las citas manuales salen <strong>confirmadas</strong> por defecto, porque ya las está registrando
+              el negocio directamente.
+            {% endif %}
+          </p>
+          <p class="panel-copy">
+            El sistema comprueba solape básico por categoría, duración y capacidad activa antes de guardar.
+          </p>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const dateInput = document.querySelector("#appointment-date");
+      const timeInput = document.querySelector('input[name="hora"]');
+      const calendarGrid = document.querySelector("#calendar-grid");
+      const calendarTitle = document.querySelector("#calendar-title");
+      const calendarPrev = document.querySelector("#calendar-prev");
+      const calendarNext = document.querySelector("#calendar-next");
+      const shortcutButtons = document.querySelectorAll("[data-offset-days]");
+      const flowShortcutButtons = document.querySelectorAll("[data-shift-days], [data-shift-minutes]");
+      const customerFilter = document.querySelector("#customer-filter");
+      const customerSelect = document.querySelector("#customer-select");
+
+      function parseLocalDate(value) {
+        if (!value) return null;
+        const [year, month, day] = value.split("-").map(Number);
+        if (!year || !month || !day) return null;
+        return new Date(year, month - 1, day);
+      }
+
+      function formatLocalDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
+
+      function addDays(baseDate, offset) {
+        const nextDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+        nextDate.setDate(nextDate.getDate() + offset);
+        return nextDate;
+      }
+
+      function shiftCurrentDate(offset) {
+        if (!dateInput) return;
+        const baseDate = parseLocalDate(dateInput.value) || today;
+        setSelectedDate(addDays(baseDate, offset));
+      }
+
+      function shiftCurrentTime(offsetMinutes) {
+        if (!timeInput || !timeInput.value) return;
+        const [hours, minutes] = timeInput.value.split(":").map(Number);
+        if (Number.isNaN(hours) || Number.isNaN(minutes)) return;
+        const total = Math.max(0, Math.min((23 * 60) + 45, (hours * 60) + minutes + offsetMinutes));
+        const shiftedHours = String(Math.floor(total / 60)).padStart(2, "0");
+        const shiftedMinutes = String(total % 60).padStart(2, "0");
+        timeInput.value = `${shiftedHours}:${shiftedMinutes}`;
+      }
+
+      if (dateInput && calendarGrid && calendarTitle && calendarPrev && calendarNext) {
+        const today = new Date();
+        let selectedDate = parseLocalDate(dateInput.value) || today;
+        let currentMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+
+        function setSelectedDate(date) {
+          selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+          dateInput.value = formatLocalDate(selectedDate);
+          currentMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+          renderCalendar();
+        }
+
+        function renderCalendar() {
+          const monthFormatter = new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric" });
+          calendarTitle.textContent = monthFormatter.format(currentMonth);
+
+          const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+          const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+          const startOffset = (firstDay.getDay() + 6) % 7;
+          const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7;
+          const todayValue = formatLocalDate(today);
+          const selectedValue = dateInput.value;
+
+          calendarGrid.innerHTML = "";
+
+          for (let index = 0; index < totalCells; index += 1) {
+            const dayNumber = index - startOffset + 1;
+            const inCurrentMonth = dayNumber > 0 && dayNumber <= lastDay.getDate();
+            const cell = document.createElement("button");
+            cell.type = "button";
+            cell.className = "calendar-day";
+
+            if (!inCurrentMonth) {
+              cell.disabled = true;
+              cell.classList.add("calendar-day-empty");
+              calendarGrid.appendChild(cell);
+              continue;
+            }
+
+            const dayDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), dayNumber);
+            const isoValue = formatLocalDate(dayDate);
+            cell.textContent = String(dayNumber);
+            cell.dataset.date = isoValue;
+
+            if (isoValue === todayValue) {
+              cell.classList.add("is-today");
+            }
+            if (isoValue === selectedValue) {
+              cell.classList.add("is-selected");
+            }
+
+            cell.addEventListener("click", () => setSelectedDate(dayDate));
+            calendarGrid.appendChild(cell);
+          }
+        }
+
+        calendarPrev.addEventListener("click", () => {
+          currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+          renderCalendar();
+        });
+
+        calendarNext.addEventListener("click", () => {
+          currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+          renderCalendar();
+        });
+
+        dateInput.addEventListener("change", () => {
+          const nextDate = parseLocalDate(dateInput.value);
+          if (!nextDate) return;
+          selectedDate = nextDate;
+          currentMonth = new Date(nextDate.getFullYear(), nextDate.getMonth(), 1);
+          renderCalendar();
+        });
+
+        shortcutButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            const offset = Number(button.dataset.offsetDays || 0);
+            setSelectedDate(addDays(today, offset));
+          });
+        });
+
+        flowShortcutButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            if (button.dataset.shiftDays) {
+              shiftCurrentDate(Number(button.dataset.shiftDays));
+            }
+            if (button.dataset.shiftMinutes) {
+              shiftCurrentTime(Number(button.dataset.shiftMinutes));
+            }
+          });
+        });
+
+        renderCalendar();
+      }
+
+      if (customerFilter && customerSelect) {
+        customerFilter.addEventListener("input", () => {
+          const term = customerFilter.value.trim().toLowerCase();
+          Array.from(customerSelect.options).forEach((option, index) => {
+            if (index === 0) return;
+            const searchText = option.dataset.search || option.textContent.toLowerCase();
+            option.hidden = term ? !searchText.includes(term) : false;
+          });
+        });
+      }
+    </script>
+  </body>
+</html>

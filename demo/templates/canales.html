@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Configuración | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Configuración</p>
+          <h1>Centro de configuración</h1>
+          <p class="subtitle">Aquí tienes reunido lo importante del negocio para saber rápido dónde tocar cada cosa.</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% include "_config_nav.html" %}
+
+      <section class="simple-grid" aria-label="Centro de configuración">
+        <article class="info-panel action-panel">
+          <h2>Negocio</h2>
+          <dl>
+            <div>
+              <dt>Nombre</dt>
+              <dd>{{ business.name }}</dd>
+            </div>
+            <div>
+              <dt>Teléfono</dt>
+              <dd>{{ business.phone }}</dd>
+            </div>
+            <div>
+              <dt>Dirección</dt>
+              <dd>{{ business.address }}</dd>
+            </div>
+            <div>
+              <dt>Horario</dt>
+              <dd>{{ business.hours.summary }}</dd>
+            </div>
+          </dl>
+          <div class="panel-actions">
+            <a class="button-link button-link-primary" href="/config/negocio">Editar negocio</a>
+          </div>
+        </article>
+
+        <article class="info-panel action-panel">
+          <h2>WhatsApp</h2>
+          <dl>
+            <div>
+              <dt>Estado</dt>
+              <dd>{{ "Activo" if whatsapp_channel.activo else "Inactivo" }}</dd>
+            </div>
+            <div>
+              <dt>Teléfono</dt>
+              <dd>{{ whatsapp_channel.telefono or "Sin configurar" }}</dd>
+            </div>
+            <div>
+              <dt>Modo</dt>
+              <dd>{{ whatsapp_channel.modo }}</dd>
+            </div>
+          </dl>
+          <div class="panel-actions">
+            <a class="button-link button-link-primary" href="/config/canales/whatsapp">Configurar WhatsApp</a>
+            {% if whatsapp_channel.activo and whatsapp_channel.whatsapp_url %}
+              <a class="button-link" href="{{ whatsapp_channel.whatsapp_url }}" target="_blank" rel="noreferrer">Probar enlace</a>
+            {% endif %}
+          </div>
+        </article>
+
+        <article class="info-panel action-panel">
+          <h2>Servicios</h2>
+          <dl>
+            <div>
+              <dt>Activos</dt>
+              <dd>{{ config_summary.services_active }} de {{ config_summary.services_total }}</dd>
+            </div>
+            <div>
+              <dt>Uso</dt>
+              <dd>Duración, precio y estado del catálogo.</dd>
+            </div>
+          </dl>
+          <div class="panel-actions">
+            <a class="button-link button-link-primary" href="/servicios">Ir a servicios</a>
+          </div>
+        </article>
+
+        <article class="info-panel action-panel">
+          <h2>Personal</h2>
+          <dl>
+            <div>
+              <dt>Activas</dt>
+              <dd>{{ config_summary.staff_active }} de {{ config_summary.staff_total }}</dd>
+            </div>
+            <div>
+              <dt>Uso</dt>
+              <dd>Categorías que puede atender cada persona y capacidad base.</dd>
+            </div>
+          </dl>
+          <div class="panel-actions">
+            <a class="button-link button-link-primary" href="/personal">Ir a personal</a>
+          </div>
+        </article>
+      </section>
+
+      <section class="table-panel" aria-label="Qué se ajusta aquí">
+        <div class="section-heading">
+          <div>
+            <h2>Cómo está organizada ahora</h2>
+            <p>Una vista rápida para no perder tiempo pensando dónde tocar cada ajuste.</p>
+          </div>
+        </div>
+        <div class="config-overview-grid">
+          <article class="config-overview-item">
+            <strong>Negocio</strong>
+            <span>Nombre, teléfono, dirección, horarios y mensajes base del chat.</span>
+          </article>
+          <article class="config-overview-item">
+            <strong>WhatsApp</strong>
+            <span>Número visible, modo de canal y enlace de contacto.</span>
+          </article>
+          <article class="config-overview-item">
+            <strong>Servicios</strong>
+            <span>Catálogo, duración, precio y activación del servicio.</span>
+          </article>
+          <article class="config-overview-item">
+            <strong>Personal</strong>
+            <span>Quién trabaja, qué categorías atiende y capacidad base.</span>
+          </article>
+        </div>
+        <p class="muted">
+          La idea no es meter más burocracia. Solo hacer más evidente dónde se ajusta cada parte importante del negocio.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

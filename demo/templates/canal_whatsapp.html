@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WhatsApp | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Contacto</p>
+          <h1>WhatsApp</h1>
+          <p class="subtitle">Activa el número que se mostrará en la demo y en los enlaces de contacto.</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% include "_config_nav.html" %}
+
+      {% if saved %}
+        <div class="notice">Configuración guardada.</div>
+      {% endif %}
+
+      <section class="detail-grid">
+        <form class="form-panel" method="post" action="/config/canales/whatsapp">
+          <h2>Ajustes rápidos</h2>
+
+          <label class="checkbox-row">
+            <input type="checkbox" name="activo" {% if channel.activo %}checked{% endif %}>
+            <span>Mostrar WhatsApp como vía de contacto</span>
+          </label>
+
+          <label>
+            <span>Número del negocio</span>
+            <input
+              name="telefono"
+              type="text"
+              value="{{ channel.telefono or '' }}"
+              placeholder="+34 928 123 456"
+            >
+          </label>
+
+          <label>
+            <span>Nombre que verá el cliente</span>
+            <input
+              name="nombre_visible"
+              type="text"
+              value="{{ channel.nombre_visible or '' }}"
+              placeholder="{{ business.name }}"
+            >
+          </label>
+
+          <label>
+            <span>Estado de integración</span>
+            <select name="modo">
+              {% for mode in modes %}
+                <option value="{{ mode }}" {% if channel.modo == mode %}selected{% endif %}>{{ mode }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <details class="advanced-box">
+            <summary>Ajustes técnicos futuros</summary>
+            <label>
+              <span>Referencia técnica opcional</span>
+              <textarea name="config_json" rows="5" placeholder='{"phone_number_id": "pendiente", "webhook": "pendiente"}'>{{ channel.config_json or '' }}</textarea>
+            </label>
+          </details>
+
+          <button class="primary-button" type="submit">Guardar WhatsApp</button>
+        </form>
+
+        <aside class="info-panel">
+          <h2>Estado actual</h2>
+          <dl>
+            <div>
+              <dt>Activo</dt>
+              <dd>{{ "Sí" if channel.activo else "No" }}</dd>
+            </div>
+            <div>
+              <dt>Modo</dt>
+              <dd>{{ channel.modo }}</dd>
+            </div>
+            <div>
+              <dt>Enlace de contacto</dt>
+              <dd>
+                {% if channel.activo and channel.whatsapp_url %}
+                  <a class="inline-link" href="{{ channel.whatsapp_url }}" target="_blank" rel="noreferrer">{{ channel.whatsapp_url }}</a>
+                {% else %}
+                  No disponible hasta activar el canal y guardar un teléfono.
+                {% endif %}
+              </dd>
+            </div>
+            <div>
+              <dt>Integración real</dt>
+              <dd>No conectada. Esta fase no usa API de Meta ni webhooks.</dd>
+            </div>
+          </dl>
+          <p class="panel-copy">
+            Usa un número con prefijo de país para que el enlace funcione bien. El estado `conectado`
+            debe reservarse para una fase futura con credenciales y webhooks reales.
+          </p>
+          <div class="panel-actions">
+            <a class="button-link" href="/config">Volver al centro</a>
+          </div>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

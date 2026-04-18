@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Servicios | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Configuración</p>
+          <h1>Servicios</h1>
+          <p class="subtitle">Lo que ofreces, cuánto tarda y el precio orientativo, sin tocar archivos.</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% include "_config_nav.html" %}
+
+      {% if saved %}
+        <div class="notice">Servicio guardado correctamente.</div>
+      {% endif %}
+
+      <section class="table-panel">
+        <div class="section-heading">
+          <div>
+            <h2>Listado de servicios</h2>
+            <p>{{ services|length }} servicios configurados.</p>
+          </div>
+          <div class="panel-actions">
+            <a class="button-link button-link-primary" href="/servicios/nuevo">Nuevo servicio</a>
+          </div>
+        </div>
+
+        {% if services %}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Servicio</th>
+                  <th>Categoría</th>
+                  <th>Duración</th>
+                  <th>Precio</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for service in services %}
+                  <tr>
+                    <td><strong>{{ service.name }}</strong></td>
+                    <td>{{ service.category_name }}</td>
+                    <td>{{ service.duration_display }}</td>
+                    <td>{{ service.price }}</td>
+                    <td><span class="badge {% if service.active %}state-confirmada{% else %}state-cancelada{% endif %}">{{ service.active_label }}</span></td>
+                    <td>
+                      <div class="status-actions">
+                        <a class="button-link compact-button" href="/servicios/{{ service.id }}/editar">Editar</a>
+                        <form method="post" action="/servicios/{{ service.id }}/activo?activo={% if service.active %}0{% else %}1{% endif %}">
+                          <button type="submit" class="{% if service.active %}button-danger{% else %}button-success{% endif %}">
+                            {% if service.active %}Desactivar{% else %}Activar{% endif %}
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="empty-state">
+            <h2>No hay servicios todavía</h2>
+            <p>Añade el primero para que el chat y las citas tengan una base real.</p>
+            <a class="button-link button-link-primary" href="/servicios/nuevo">Crear servicio</a>
+          </div>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>

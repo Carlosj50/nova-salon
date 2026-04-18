@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }} | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Configuración</p>
+          <h1>{{ page_title }}</h1>
+          <p class="subtitle">{{ page_subtitle }}</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% include "_config_nav.html" %}
+
+      <p class="back-row"><a class="inline-link" href="/config">← Volver al centro</a></p>
+
+      <section class="form-panel">
+        {% if error %}
+          <div class="notice notice-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="{{ form_action }}">
+          <label>
+            Nombre
+            <input name="nombre" type="text" value="{{ form_data.nombre or '' }}" required>
+          </label>
+
+          <label>
+            Categoría
+            <select name="categoria_id" required>
+              <option value="">Elegir categoría...</option>
+              {% for category in categories %}
+                <option value="{{ category.id }}" {% if form_data.categoria_id == category.id %}selected{% endif %}>
+                  {{ category.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <div class="compact-form-grid">
+            <label>
+              Duración en minutos
+              <input name="duracion_minutos" type="number" min="5" step="5" value="{{ form_data.duracion_minutos or '' }}" required>
+            </label>
+
+            <label>
+              Precio orientativo
+              <input name="precio" type="text" value="{{ form_data.precio or '' }}" placeholder="desde 25 EUR" required>
+            </label>
+          </div>
+
+          <label class="checkbox-row">
+            <input name="activo" type="checkbox" {% if form_data.activo == 'on' %}checked{% endif %}>
+            Servicio activo
+          </label>
+
+          <div class="panel-actions">
+            <button class="primary-button" type="submit">{{ submit_label }}</button>
+            <a class="button-link" href="/servicios">Cancelar</a>
+          </div>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

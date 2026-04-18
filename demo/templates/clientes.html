@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Clientes | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Clientes</p>
+          <h1>Clientes</h1>
+          <p class="subtitle">Busca por nombre o teléfono y abre la ficha en un clic.</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      <section class="toolbar" aria-label="Buscar clientes">
+        <label class="search-box">
+          <span class="sr-only">Buscar cliente</span>
+          <input id="customer-search" type="search" placeholder="Buscar cliente o teléfono" autocomplete="off">
+        </label>
+        <span class="toolbar-note">{{ customers|length }} clientes</span>
+      </section>
+
+      <section class="table-panel" aria-label="Listado de clientes">
+        {% if customers %}
+          <div class="table-wrap">
+            <table id="customers-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Teléfono</th>
+                  <th>Alta</th>
+                  <th>Última visita</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for customer in customers %}
+                  <tr data-search="{{ customer.search_text }}">
+                    <td><strong>{{ customer.nombre }}</strong></td>
+                    <td>{{ customer.telefono }}</td>
+                    <td>{{ customer.fecha_alta_display }}</td>
+                    <td>{{ customer.ultima_visita_display }}</td>
+                    <td>
+                      <div class="status-actions">
+                        <a class="button-link compact-button" href="/clientes/{{ customer.id }}">Ver ficha</a>
+                        <a class="button-link compact-button" href="/citas/nueva?customer_id={{ customer.id }}&return_to=/clientes/{{ customer.id }}">Nueva cita</a>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <p id="no-customer-results" class="empty-inline" hidden>No hay clientes con ese nombre o teléfono.</p>
+        {% else %}
+          <div class="empty-state">
+            <h2>No hay clientes todavía</h2>
+            <p>Cuando el chat registre una primera cita, se creará aquí la ficha del cliente.</p>
+            <a class="button-link" href="/">Abrir chat demo</a>
+          </div>
+        {% endif %}
+      </section>
+    </main>
+
+    <script>
+      const searchInput = document.querySelector("#customer-search");
+      const rows = document.querySelectorAll("#customers-table tbody tr");
+      const emptyResults = document.querySelector("#no-customer-results");
+
+      if (searchInput) {
+        searchInput.addEventListener("input", () => {
+          const term = searchInput.value.trim().toLowerCase();
+          let visibleRows = 0;
+
+          rows.forEach((row) => {
+            const matches = row.dataset.search.includes(term);
+            row.hidden = !matches;
+            if (matches) visibleRows += 1;
+          });
+
+          if (emptyResults) {
+            emptyResults.hidden = visibleRows > 0;
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

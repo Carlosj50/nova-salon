@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }} | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Clientes</p>
+          <h1>{{ page_title }}</h1>
+          <p class="subtitle">{{ page_subtitle }}</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      <p class="back-row"><a class="inline-link" href="{{ form_data.return_to }}">← Volver a la ficha</a></p>
+
+      <section class="form-panel">
+        {% if error %}
+          <div class="notice notice-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="{{ form_action }}">
+          <input type="hidden" name="return_to" value="{{ form_data.return_to }}">
+
+          <div class="locked-card">
+            <strong>{{ customer.nombre }}</strong>
+            <span>Alta: {{ customer.fecha_alta_display }}</span>
+          </div>
+
+          <label>
+            Nombre
+            <input name="nombre" type="text" value="{{ form_data.nombre or '' }}" required>
+          </label>
+
+          <label>
+            Teléfono
+            <input name="telefono" type="text" value="{{ form_data.telefono or '' }}" placeholder="600 123 123" required>
+            <span class="field-note">Acepta espacios o +34. Se guarda normalizado para evitar duplicados básicos.</span>
+          </label>
+
+          <label>
+            Email
+            <input name="email" type="email" value="{{ form_data.email or '' }}" placeholder="Opcional">
+          </label>
+
+          <label>
+            Notas
+            <textarea name="notas" rows="5" placeholder="Opcional">{{ form_data.notas or '' }}</textarea>
+          </label>
+
+          <div class="panel-actions">
+            <button class="primary-button" type="submit">{{ submit_label }}</button>
+            <a class="button-link" href="{{ form_data.return_to }}">Cancelar</a>
+          </div>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

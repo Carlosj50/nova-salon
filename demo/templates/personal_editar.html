@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }} | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Configuración</p>
+          <h1>{{ page_title }}</h1>
+          <p class="subtitle">{{ page_subtitle }}</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% include "_config_nav.html" %}
+
+      <p class="back-row"><a class="inline-link" href="/config">← Volver al centro</a></p>
+
+      <section class="form-panel">
+        {% if error %}
+          <div class="notice notice-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="{{ form_action }}">
+          <label>
+            Nombre
+            <input name="nombre" type="text" value="{{ form_data.nombre or '' }}" required>
+          </label>
+
+          <label>
+            Rol o puesto
+            <input name="rol" type="text" value="{{ form_data.rol or '' }}" placeholder="Opcional">
+          </label>
+
+          <fieldset class="checkbox-group">
+            <legend>Categorías que puede atender</legend>
+            <div class="checkbox-grid">
+              {% for category in categories %}
+                <label class="checkbox-card">
+                  <input
+                    name="service_categories"
+                    type="checkbox"
+                    value="{{ category.id }}"
+                    {% if category.id in form_data.service_categories %}checked{% endif %}
+                  >
+                  <span>{{ category.name }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </fieldset>
+
+          <label class="checkbox-row">
+            <input name="activo" type="checkbox" {% if form_data.activo == 'on' %}checked{% endif %}>
+            Persona activa
+          </label>
+
+          <div class="panel-actions">
+            <button class="primary-button" type="submit">{{ submit_label }}</button>
+            <a class="button-link" href="/personal">Cancelar</a>
+          </div>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,195 @@
+{
+  "name": "Peluquería Nova",
+  "sector": "peluquería y estética",
+  "timezone": "Atlantic/Canary",
+  "phone": "928 000 000",
+  "address": "Calle Principal 24, Las Palmas de Gran Canaria",
+  "hours": {
+    "summary": "lunes a viernes de 9:30 a 19:30 y sábados de 10:00 a 14:00",
+    "monday_friday": "09:30-19:30",
+    "saturday": "10:00-14:00",
+    "sunday": "cerrado"
+  },
+  "service_categories": [
+    {
+      "id": "corte_peinado",
+      "name": "Corte y peinado",
+      "default_capacity": 4
+    },
+    {
+      "id": "color",
+      "name": "Coloración",
+      "default_capacity": 2
+    },
+    {
+      "id": "unas",
+      "name": "Uñas",
+      "default_capacity": 2
+    }
+  ],
+  "services": [
+    {
+      "id": "corte_caballero",
+      "name": "Corte caballero",
+      "category": "corte_peinado",
+      "aliases": ["corte de caballero", "corte hombre", "corte masculino", "corte de pelo hombre", "caballero"],
+      "price": "desde 14 EUR",
+      "duration": "30 min",
+      "duration_minutes": 30
+    },
+    {
+      "id": "arreglo_barba",
+      "name": "Arreglo de barba",
+      "category": "corte_peinado",
+      "aliases": ["barba", "arreglo de barba", "afeitado", "afeitarme la barba", "barbería"],
+      "price": "desde 10 EUR",
+      "duration": "20 min",
+      "duration_minutes": 20
+    },
+    {
+      "id": "corte_mujer",
+      "name": "Corte mujer",
+      "category": "corte_peinado",
+      "aliases": ["corte mujer", "corte de mujer", "corte femenino", "corte y peinado de mujer", "corte y peinado mujer"],
+      "price": "desde 22 EUR",
+      "duration": "45 min",
+      "duration_minutes": 45
+    },
+    {
+      "id": "corte_infantil",
+      "name": "Corte infantil",
+      "category": "corte_peinado",
+      "aliases": ["corte infantil", "corte niño", "corte niña", "corte para niño", "corte para niña", "corte para mi hijo", "corte para mi hija"],
+      "price": "desde 12 EUR",
+      "duration": "30 min",
+      "duration_minutes": 30
+    },
+    {
+      "id": "coloracion",
+      "name": "Coloración",
+      "category": "color",
+      "aliases": ["coloracion", "color", "tinte", "teñir", "tenir", "color de pelo"],
+      "price": "desde 38 EUR",
+      "duration": "90 min",
+      "duration_minutes": 90,
+      "rules": {
+        "requires_specialist": true,
+        "operational_buffer_staff": 1
+      }
+    },
+    {
+      "id": "mechas",
+      "name": "Mechas",
+      "category": "color",
+      "aliases": ["mechas", "reflejos", "balayage"],
+      "price": "desde 45 EUR",
+      "duration": "120 min",
+      "duration_minutes": 120,
+      "rules": {
+        "requires_specialist": true,
+        "operational_buffer_staff": 1
+      }
+    },
+    {
+      "id": "decoloracion",
+      "name": "Decoloración",
+      "category": "color",
+      "aliases": ["decoloración", "decoloracion", "decolorar", "decolorarme"],
+      "price": "desde 55 EUR",
+      "duration": "150 min",
+      "duration_minutes": 150,
+      "rules": {
+        "requires_specialist": true,
+        "operational_buffer_staff": 1
+      }
+    },
+    {
+      "id": "peinado",
+      "name": "Peinado",
+      "category": "corte_peinado",
+      "aliases": ["peinar", "peinado", "brushing"],
+      "price": "desde 18 EUR",
+      "duration": "40 min",
+      "duration_minutes": 40
+    },
+    {
+      "id": "manicura",
+      "name": "Manicura",
+      "category": "unas",
+      "aliases": ["manicura", "uñas manos", "unas manos", "esmaltado"],
+      "price": "desde 16 EUR",
+      "duration": "45 min",
+      "duration_minutes": 45
+    },
+    {
+      "id": "unas_gel",
+      "name": "Uñas gel",
+      "category": "unas",
+      "aliases": ["uñas gel", "unas gel", "gel", "uñas acrílicas", "unas acrilicas"],
+      "price": "desde 28 EUR",
+      "duration": "75 min",
+      "duration_minutes": 75
+    },
+    {
+      "id": "pedicura",
+      "name": "Pedicura",
+      "category": "unas",
+      "aliases": ["pedicura"],
+      "price": "desde 20 EUR",
+      "duration": "50 min",
+      "duration_minutes": 50
+    }
+  ],
+  "staff": [
+    {
+      "id": "ana",
+      "name": "Ana",
+      "role": "Peluquera senior",
+      "service_categories": ["corte_peinado", "color"],
+      "active": true
+    },
+    {
+      "id": "beatriz",
+      "name": "Beatriz",
+      "role": "Peluquera",
+      "service_categories": ["corte_peinado", "color"],
+      "active": true
+    },
+    {
+      "id": "carla",
+      "name": "Carla",
+      "role": "Esteticista",
+      "service_categories": ["unas"],
+      "active": true
+    },
+    {
+      "id": "diana",
+      "name": "Diana",
+      "role": "Esteticista",
+      "service_categories": ["unas", "corte_peinado"],
+      "active": true
+    }
+  ],
+  "operational_rules": {
+    "default_slot_minutes": 30,
+    "appointment_states": ["pendiente", "confirmada", "completada", "cancelada"],
+    "availability_mode": "basic_category_capacity_overlap",
+    "category_capacity": {
+      "corte_peinado": 4,
+      "color": 2,
+      "unas": 2
+    },
+    "notes": "La versión actual usa una disponibilidad básica por categoría, duración y capacidad. La asignación a personal concreto y las propuestas automáticas quedan para la siguiente fase."
+  },
+  "messages": {
+    "welcome": "Hola, soy el asistente de Peluquería Nova. Puedo ayudarte con horarios, servicios, precios o dejarte una cita pedida.",
+    "fallback": "Puedo ayudarte con horarios, servicios, precios, ubicación o dejarte una cita pedida. Por ejemplo: 'quiero cita para tinte mañana por la tarde'.",
+    "appointment_saved": "Solicitud registrada. Te llamaremos para confirmar disponibilidad y cerrar la cita."
+  },
+  "auth": {
+    "admin_username": "admin",
+    "admin_password": "nova-demo-2026",
+    "session_secret": "nova-panel-session-secret-2026",
+    "session_cookie": "nova_panel_session"
+  }
+}
