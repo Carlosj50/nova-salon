@@ -125,8 +125,8 @@ def load_auth_config(path: Path) -> dict[str, Any]:
 
     raw_auth = dict(config.get("auth", {}))
     username = os.getenv("APP_ADMIN_USERNAME", raw_auth.get("admin_username", "admin"))
-    password = os.getenv("APP_ADMIN_PASSWORD", raw_auth.get("admin_password", "cambia-esta-clave"))
-    session_secret = os.getenv("APP_SESSION_SECRET", raw_auth.get("session_secret", "cambia-este-secreto"))
+    password = os.getenv("APP_ADMIN_PASSWORD", raw_auth.get("admin_password", "local-dev-change-me"))
+    session_secret = os.getenv("APP_SESSION_SECRET", raw_auth.get("session_secret", "local-dev-session-secret-change-me"))
     session_cookie = os.getenv("APP_SESSION_COOKIE", raw_auth.get("session_cookie", "nova_panel_session"))
 
     return {

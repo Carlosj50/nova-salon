@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from secrets import compare_digest, token_urlsafe
 from time import time
 from typing import Any
 from urllib.parse import urlencode
 
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
@@ -29,6 +31,54 @@ INTERNAL_PATH_PREFIXES = (
     "/config",
 )
 PUBLIC_PATHS = {"/", "/login", "/logout", "/api/chat", "/health"}
+
+
+def get_or_create_csrf_token(request: Request) -> str:
+    session = request.scope.get("session", {})
+    token = str(session.get("csrf_token") or "").strip()
+    if not token:
+        token = token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+def has_valid_csrf_token(request: Request, submitted_token: str | None) -> bool:
+    token = str(submitted_token or "").strip()
+    if not token:
+        return False
+    expected_token = get_or_create_csrf_token(request)
+    return compare_digest(token, expected_token)
+
+
+def csrf_error_response() -> HTMLResponse:
+    return HTMLResponse(
+        """
+        <!doctype html>
+        <html lang="es">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Formulario no válido</title>
+          </head>
+          <body style="font-family: Inter, system-ui, sans-serif; background:#fcf7f3; color:#342833; padding:32px;">
+            <main style="max-width:520px; margin:0 auto; background:#fffdfa; border:1px solid #e9d9dc; border-radius:8px; padding:24px;">
+              <h1 style="margin:0 0 10px; font-size:28px;">No he podido validar el formulario</h1>
+              <p style="margin:0; line-height:1.5;">Recarga la página e inténtalo de nuevo. Si estabas editando algo, vuelve a abrir el formulario antes de guardar.</p>
+            </main>
+          </body>
+        </html>
+        """,
+        status_code=403,
+    )
+
+
+def csrf_failed(request: Request, token: str | None) -> HTMLResponse | None:
+    if has_valid_csrf_token(request, token):
+        return None
+    return csrf_error_response()
+
+
+templates.env.globals["csrf_token"] = get_or_create_csrf_token
 
 
 def get_business() -> dict:

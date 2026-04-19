@@ -40,8 +40,10 @@ Ahora el sistema:
 
 Además, la estructura interna queda algo más ordenada sin cambiar comportamiento:
 
-- `demo/app.py` mantiene el wiring principal y las rutas.
+- `demo/app.py` mantiene el wiring principal y las rutas internas más operativas.
 - `demo/web/context.py` agrupa auth simple, carga de negocio y estado web reutilizable.
+- `demo/web/routes_public.py` agrupa login, logout, chat público y healthcheck.
+- `demo/web/routes_config.py` agrupa configuración del negocio y del canal WhatsApp.
 - `demo/web/view_helpers.py` agrupa helpers de agenda, calendario y formularios.
 - `demo/core/bot_logic.py` sigue orquestando el chat, pero parte del peso se reparte en:
   - `demo/core/chat_booking.py`
@@ -56,6 +58,13 @@ Base local:
 ```text
 demo/data/negocio.db
 ```
+
+Artefactos locales que no conviene versionar ni meter en zips de entrega:
+
+- `demo/data/negocio.db` y otras SQLite generadas al probar
+- `demo/data/uploads/` con logos o archivos subidos en local
+- `.env` y secretos locales
+- `__pycache__/`, logs y zips temporales
 
 Tabla `clientes`:
 
@@ -272,31 +281,41 @@ La demo protege las rutas internas del panel:
 
 Si entras sin sesión, la app te lleva a `/login` y, al entrar bien, vuelve al punto útil.
 
-Configuración base en `demo/data/negocio.json`:
-
-```json
-"auth": {
-  "admin_username": "admin",
-  "admin_password": "nova-demo-2026",
-  "session_secret": "nova-panel-session-secret-2026",
-  "session_cookie": "nova_panel_session"
-}
-```
-
-También admite estas variables de entorno:
+La demo admite configuración por variables de entorno:
 
 - `APP_ADMIN_USERNAME`
 - `APP_ADMIN_PASSWORD`
 - `APP_SESSION_SECRET`
 - `APP_SESSION_COOKIE`
 
+Como base rápida de desarrollo puedes copiar `.env.example` a `.env` y ajustar ahí las credenciales locales.
+
+En `demo/data/negocio.json` solo quedan valores locales y ficticios:
+
+```json
+"auth": {
+  "admin_username": "admin",
+  "admin_password": "local-dev-change-me",
+  "session_secret": "local-dev-session-secret-change-me",
+  "session_cookie": "nova_panel_session"
+}
+```
+
 Limitaciones de esta fase:
 
 - solo hay una cuenta admin
-- la contraseña se configura en JSON o variables de entorno, sin hashing propio
+- la contraseña sigue siendo simple y se configura por entorno o valores locales de ejemplo
 - no hay roles ni permisos avanzados
 - no hay recuperación de contraseña
-- no hay protección CSRF dedicada para logout o formularios internos
+- logout sigue siendo por ruta simple
+
+Refuerzos actuales:
+
+- los formularios internos usan token CSRF
+- conviene sacar las credenciales reales del repo y dejarlas en entorno
+- la subida de logo acepta PNG, JPG/JPEG y WEBP
+- el límite visible actual del logo es de 5 MB
+- SVG ya no se admite para reducir riesgo innecesario en un panel pequeño
 
 ## Contexto de WhatsApp
 
@@ -339,6 +358,8 @@ Desde `/config/negocio` ya puedes editar:
 - mensaje base cuando el chat no entiende algo
 
 Eso se guarda en SQLite como configuración editable del negocio. En el caso del logo, el archivo se guarda de forma local en `demo/data/uploads/branding/` y la configuración solo conserva su ruta pública dentro de la app.
+
+El logo admite PNG, JPG/JPEG o WEBP y el límite visible actual es de 5 MB.
 
 El nombre y el logo se reflejan ahora en:
 

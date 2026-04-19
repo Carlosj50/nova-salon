@@ -1,8 +1,42 @@
 .venv/
+
+# Entorno local
+.env
+.env.*
+!.env.example
+
+# Python
 __pycache__/
 *.py[cod]
 .pytest_cache/
-*.zip
+.mypy_cache/
+.ruff_cache/
+
+# Bases y artefactos locales
 *.db
+*.db-*
+*.sqlite
+*.sqlite3
 demo/data/uploads/
+
+# Paquetes y entregas locales
+*.zip
+*.tar
+*.tar.gz
+
+# Cobertura y builds locales
+.coverage
+htmlcov/
+build/
+dist/
+
+# Temporales comunes
+*.log
+*.tmp
+*.bak
+*.orig
+.DS_Store
+Thumbs.db
+
+# Artefacto local heredado
 servicio_ia_negocios

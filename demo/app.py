@@ -1,30 +1,20 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from pathlib import Path
-from secrets import compare_digest
-from time import time
-from typing import Any
 from urllib.parse import quote_plus
-from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.requests import Request
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
-from starlette.datastructures import UploadFile
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from starlette.requests import Request
 
 from .core.appointment_service import (
     AppointmentServiceError,
     create_customer_appointment,
     update_customer_appointment,
 )
-from .core.bot_logic import handle_message
-from .core.channels import CHANNEL_MODES, default_channel, get_channel, list_channels, upsert_channel
-from .core.config import upsert_business_overrides
 from .core.db import init_db
 from .core.models import APPOINTMENT_STATES
 from .core.repositories import (
@@ -54,12 +44,12 @@ from .web.context import (
     DB_PATH,
     get_auth_settings,
     get_business,
-    get_chat_state,
-    is_authenticated,
-    normalize_next_path,
     require_admin_access,
+    csrf_failed,
     templates,
 )
+from .web.routes_config import router as config_router
+from .web.routes_public import router as public_router
 from .web.view_helpers import (
     AGENDA_FILTERS,
     MANUAL_APPOINTMENT_STATES,
@@ -72,12 +62,9 @@ from .web.view_helpers import (
     build_month_overview,
     build_quick_reschedule_actions,
     build_visual_planner,
-    business_form_context,
     business_today,
     customer_form_context,
     format_date_label,
-    is_valid_business_schedule,
-    login_form_context,
     manual_appointment_context,
     normalize_return_to,
     parse_optional_date,
@@ -113,160 +100,11 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 MEDIA_DIR = BASE_DIR / "data" / "uploads"
-BRANDING_DIR = MEDIA_DIR / "branding"
-BRANDING_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 init_db(DB_PATH)
 
-
-class ChatRequest(BaseModel):
-    message: str
-    session_id: str | None = None
-    channel: str | None = None
-    incoming_phone: str | None = None
-
-
-class ChatResponse(BaseModel):
-    session_id: str
-    reply: str
-    intent: str
-    appointment_created: bool = False
-
-
-ALLOWED_LOGO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
-ALLOWED_LOGO_CONTENT_TYPES = {
-    "image/png",
-    "image/jpeg",
-    "image/webp",
-    "image/svg+xml",
-}
-MAX_LOGO_BYTES = 5 * 1024 * 1024
-
-
-def is_logo_upload(value: Any) -> bool:
-    return isinstance(value, UploadFile) and bool((value.filename or "").strip())
-
-
-def remove_branding_logo(logo_path: str | None) -> None:
-    if not logo_path or not logo_path.startswith("/media/branding/"):
-        return
-    logo_file = BRANDING_DIR / Path(logo_path).name
-    if logo_file.exists():
-        logo_file.unlink()
-
-
-async def save_branding_logo(upload: UploadFile, existing_logo_path: str | None = None) -> tuple[str | None, str | None]:
-    filename = Path(upload.filename or "").name
-    extension = Path(filename).suffix.lower()
-    content_type = str(upload.content_type or "").lower()
-    try:
-        if extension not in ALLOWED_LOGO_EXTENSIONS:
-            return None, "El logo debe ser PNG, JPG, WEBP o SVG."
-        if content_type and content_type not in ALLOWED_LOGO_CONTENT_TYPES:
-            return None, "No he podido aceptar ese tipo de imagen. Usa PNG, JPG, WEBP o SVG."
-
-        content = await upload.read()
-        if not content:
-            return None, "No he podido leer el logo que has subido."
-        if len(content) > MAX_LOGO_BYTES:
-            return None, "El logo es demasiado grande. Usa una imagen de hasta 5 MB."
-
-        stored_name = f"logo-{uuid4().hex}{extension}"
-        target = BRANDING_DIR / stored_name
-        target.write_bytes(content)
-        remove_branding_logo(existing_logo_path)
-        return f"/media/branding/{stored_name}", None
-    finally:
-        await upload.close()
-
-
-@app.get("/login", response_class=HTMLResponse, response_model=None)
-def login_page(request: Request, next: str | None = None, logged_out: int = 0) -> HTMLResponse | RedirectResponse:
-    next_path = normalize_next_path(next)
-    if is_authenticated(request):
-        return RedirectResponse(next_path, status_code=303)
-
-    return templates.TemplateResponse(
-        request,
-        "login.html",
-        login_form_context(
-            request,
-            business=get_business(),
-            next_path=next_path,
-            logged_out=bool(logged_out),
-        ),
-    )
-
-
-@app.post("/login", response_class=HTMLResponse, response_model=None)
-async def login_submit(request: Request) -> HTMLResponse | RedirectResponse:
-    data = await read_form_data(request)
-    username = (data.get("username") or "").strip()
-    password = data.get("password") or ""
-    next_path = normalize_next_path(data.get("next"))
-    auth_settings = get_auth_settings()
-
-    if compare_digest(username, auth_settings["admin_username"]) and compare_digest(password, auth_settings["admin_password"]):
-        request.session.clear()
-        request.session["is_authenticated"] = True
-        request.session["auth_user"] = auth_settings["admin_username"]
-        request.session["auth_at"] = int(time())
-        return RedirectResponse(next_path, status_code=303)
-
-    return templates.TemplateResponse(
-        request,
-        "login.html",
-        login_form_context(
-            request,
-            business=get_business(),
-            next_path=next_path,
-            error="No he podido entrar con esos datos. Revisa usuario y contraseña.",
-        ),
-        status_code=400,
-    )
-
-
-@app.get("/logout")
-def logout(request: Request) -> RedirectResponse:
-    request.session.clear()
-    return RedirectResponse("/login?logged_out=1", status_code=303)
-
-
-@app.get("/", response_class=HTMLResponse)
-def chat_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request,
-        "chat.html",
-        {
-            "business": get_business(),
-            "whatsapp_channel": get_channel(DB_PATH, "whatsapp"),
-            "active_page": "chat",
-        },
-    )
-
-
-@app.post("/api/chat", response_model=ChatResponse)
-def chat(payload: ChatRequest) -> dict:
-    business = get_business()
-    session_id = payload.session_id or str(uuid4())
-    state = get_chat_state(session_id)
-
-    result = handle_message(
-        payload.message,
-        business,
-        state,
-        DB_PATH,
-        channel_type=payload.channel,
-        incoming_phone=payload.incoming_phone,
-    )
-    state.last_seen_at = time()
-
-    return {
-        "session_id": session_id,
-        "reply": result["reply"],
-        "intent": result["intent"],
-        "appointment_created": result.get("appointment_created", False),
-    }
+app.include_router(public_router)
+app.include_router(config_router)
 
 
 @app.get("/agenda", response_class=HTMLResponse)
@@ -454,24 +292,30 @@ def agenda_visual_page(
     )
 
 
-@app.post("/citas/{appointment_id}/estado")
-def change_appointment_status(request: Request, appointment_id: int, estado: str, return_to: str | None = None) -> RedirectResponse:
+@app.post("/citas/{appointment_id}/estado", response_model=None)
+async def change_appointment_status(request: Request, appointment_id: int, estado: str, return_to: str | None = None) -> RedirectResponse | HTMLResponse:
     if redirect := require_admin_access(request):
         return redirect
+    data = await read_form_data(request)
+    if invalid := csrf_failed(request, data.get("csrf_token")):
+        return invalid
     if not update_appointment_status(DB_PATH, appointment_id, estado):
         raise HTTPException(status_code=400, detail="Estado de cita no válido")
     return RedirectResponse(normalize_return_to(return_to), status_code=303)
 
 
-@app.post("/citas/{appointment_id}/reprogramar")
-def quick_reschedule_appointment(
+@app.post("/citas/{appointment_id}/reprogramar", response_model=None)
+async def quick_reschedule_appointment(
     request: Request,
     appointment_id: int,
     move: str,
     return_to: str | None = None,
-) -> RedirectResponse:
+) -> RedirectResponse | HTMLResponse:
     if redirect := require_admin_access(request):
         return redirect
+    data = await read_form_data(request)
+    if invalid := csrf_failed(request, data.get("csrf_token")):
+        return invalid
 
     appointment = get_appointment(DB_PATH, appointment_id)
     if not appointment:
@@ -619,6 +463,8 @@ async def save_customer_edit(request: Request, customer_id: int) -> HTMLResponse
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
     data = await read_form_data(request)
+    if invalid := csrf_failed(request, data.get("csrf_token")):
+        return invalid
     form_data = {
         "nombre": (data.get("nombre") or "").strip(),
         "telefono": (data.get("telefono") or "").strip(),
@@ -723,6 +569,8 @@ async def create_service_page(request: Request) -> HTMLResponse | RedirectRespon
         return redirect
     business = get_business()
     data = await read_form_data(request)
+    if invalid := csrf_failed(request, data.get("csrf_token")):
+        return invalid
     categories = prepare_categories(service_category_options(active_only=False))
     form_data = {
         "nombre": (data.get("nombre") or "").strip(),
@@ -817,6 +665,8 @@ async def save_service_page(request: Request, service_id: str) -> HTMLResponse |
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
     data = await read_form_data(request)
+    if invalid := csrf_failed(request, data.get("csrf_token")):
+        return invalid
     categories = prepare_categories(service_category_options(active_only=False))
     form_data = {
         "nombre": (data.get("nombre") or "").strip(),
@@ -869,10 +719,13 @@ async def save_service_page(request: Request, service_id: str) -> HTMLResponse |
     return redirect_with_saved("/servicios")
 
 
-@app.post("/servicios/{service_id}/activo")
-def change_service_active(request: Request, service_id: str, activo: int) -> RedirectResponse:
+@app.post("/servicios/{service_id}/activo", response_model=None)
+async def change_service_active(request: Request, service_id: str, activo: int) -> RedirectResponse | HTMLResponse:
     if redirect := require_admin_access(request):
         return redirect
+    data = await read_form_data(request)
+    if invalid := csrf_failed(request, data.get("csrf_token")):
+        return invalid
     set_service_active(DB_PATH, service_id, bool(activo))
     return RedirectResponse("/servicios", status_code=303)
 
@@ -908,11 +761,13 @@ def staff_page(request: Request, saved: int = 0, capacity_saved: int = 0) -> HTM
     )
 
 
-@app.post("/personal/capacidad")
+@app.post("/personal/capacidad", response_model=None)
 async def save_capacity_page(request: Request) -> RedirectResponse:
     if redirect := require_admin_access(request):
         return redirect
     data = await read_form_data(request)
+    if invalid := csrf_failed(request, data.get("csrf_token")):
+        return invalid
     categories = service_category_options(active_only=False)
     capacities: dict[str, int] = {}
     for category in categories:
@@ -958,6 +813,8 @@ async def create_staff_page(request: Request) -> HTMLResponse | RedirectResponse
         return redirect
     business = get_business()
     values = await read_form_lists(request)
+    if invalid := csrf_failed(request, values.get("csrf_token", [""])[-1]):
+        return invalid
     categories = prepare_categories(service_category_options(active_only=False))
     selected_categories = [value for value in values.get("service_categories", []) if value]
     form_data = {
@@ -1043,6 +900,8 @@ async def save_staff_page(request: Request, staff_id: str) -> HTMLResponse | Red
         raise HTTPException(status_code=404, detail="Persona no encontrada")
 
     values = await read_form_lists(request)
+    if invalid := csrf_failed(request, values.get("csrf_token", [""])[-1]):
+        return invalid
     categories = prepare_categories(service_category_options(active_only=False))
     selected_categories = [value for value in values.get("service_categories", []) if value]
     form_data = {
@@ -1087,10 +946,13 @@ async def save_staff_page(request: Request, staff_id: str) -> HTMLResponse | Red
     return redirect_with_saved("/personal")
 
 
-@app.post("/personal/{staff_id}/activo")
-def change_staff_active(request: Request, staff_id: str, activo: int) -> RedirectResponse:
+@app.post("/personal/{staff_id}/activo", response_model=None)
+async def change_staff_active(request: Request, staff_id: str, activo: int) -> RedirectResponse | HTMLResponse:
     if redirect := require_admin_access(request):
         return redirect
+    data = await read_form_data(request)
+    if invalid := csrf_failed(request, data.get("csrf_token")):
+        return invalid
     set_staff_active(DB_PATH, staff_id, bool(activo))
     return RedirectResponse("/personal", status_code=303)
 
@@ -1116,6 +978,7 @@ def new_appointment_page(
         business=business,
         service_id=servicio_id,
         repeat_from=repeat_from,
+        time=hora,
     )
     prefilled_date = fecha if parse_optional_date(fecha) else (
         repeat_context["recommended_date"] if repeat_context else business_today(business)
@@ -1167,6 +1030,8 @@ async def create_manual_appointment(request: Request) -> HTMLResponse | Redirect
         return redirect
     business = get_business()
     data = await read_form_data(request)
+    if invalid := csrf_failed(request, data.get("csrf_token")):
+        return invalid
     customers = prepare_customers(list_customers(DB_PATH))
     services = service_catalog_options(active_only=True)
     services_by_id = service_map(business)
@@ -1424,6 +1289,8 @@ async def save_appointment_edit(
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
     data = await read_form_data(request)
+    if invalid := csrf_failed(request, data.get("csrf_token")):
+        return invalid
     services = service_catalog_options(
         active_only=True,
         include_service_name=appointment.get("servicio"),
@@ -1503,245 +1370,3 @@ async def save_appointment_edit(
     except AppointmentServiceError as exc:
         return edit_response(exc.message)
     return redirect_with_saved(form_data["return_to"])
-
-
-@app.get("/config", response_class=HTMLResponse)
-def config_hub_page(request: Request) -> HTMLResponse:
-    if redirect := require_admin_access(request):
-        return redirect
-    business = get_business()
-    services = list_services_config(DB_PATH)
-    staff_members = list_staff_members(DB_PATH)
-    return templates.TemplateResponse(
-        request,
-        "canales.html",
-        {
-            "business": business,
-            "channels": list_channels(DB_PATH),
-            "whatsapp_channel": get_channel(DB_PATH, "whatsapp") or default_channel("whatsapp"),
-            "config_summary": {
-                "services_total": len(services),
-                "services_active": sum(1 for service in services if service.get("active", True)),
-                "staff_total": len(staff_members),
-                "staff_active": sum(1 for member in staff_members if member.get("active", True)),
-            },
-            "active_page": "config",
-            "config_section": "hub",
-        },
-    )
-
-
-@app.get("/config/canales", response_class=HTMLResponse)
-def channel_config_page(request: Request) -> RedirectResponse:
-    if redirect := require_admin_access(request):
-        return redirect
-    return RedirectResponse("/config", status_code=303)
-
-
-@app.get("/config/negocio", response_class=HTMLResponse)
-def business_config_page(request: Request, saved: int = 0) -> HTMLResponse:
-    if redirect := require_admin_access(request):
-        return redirect
-
-    business = get_business()
-    form_data = {
-        "name": business.get("name", ""),
-        "sector": business.get("sector", ""),
-        "phone": business.get("phone", ""),
-        "address": business.get("address", ""),
-        "logo_path": business.get("logo_path", ""),
-        "hours_summary": business.get("hours", {}).get("summary", ""),
-        "hours_monday_friday": business.get("hours", {}).get("monday_friday", ""),
-        "hours_saturday": business.get("hours", {}).get("saturday", ""),
-        "hours_sunday": business.get("hours", {}).get("sunday", ""),
-        "welcome_message": business.get("messages", {}).get("welcome", ""),
-        "fallback_message": business.get("messages", {}).get("fallback", ""),
-    }
-
-    return templates.TemplateResponse(
-        request,
-        "config_negocio.html",
-        business_form_context(
-            request,
-            business=business,
-            form_data=form_data,
-            form_action="/config/negocio",
-            page_title="Datos del negocio",
-            page_subtitle="Lo básico del salón para no tener que tocar archivos en cambios normales.",
-            submit_label="Guardar negocio",
-            saved=bool(saved),
-        ),
-    )
-
-
-@app.post("/config/negocio", response_class=HTMLResponse, response_model=None)
-async def save_business_config_page(request: Request) -> HTMLResponse | RedirectResponse:
-    if redirect := require_admin_access(request):
-        return redirect
-
-    business = get_business()
-    logo_upload: UploadFile | None = None
-    content_type = str(request.headers.get("content-type") or "")
-    if "multipart/form-data" in content_type:
-        form = await request.form()
-        data = {key: str(form.get(key) or "") for key in form.keys() if key != "logo_file"}
-        if is_logo_upload(form.get("logo_file")):
-            logo_upload = form.get("logo_file")
-    else:
-        data = await read_form_data(request)
-    form_data = {
-        "name": (data.get("name") or "").strip(),
-        "sector": (data.get("sector") or "").strip(),
-        "phone": (data.get("phone") or "").strip(),
-        "address": (data.get("address") or "").strip(),
-        "logo_path": str(business.get("logo_path") or ""),
-        "remove_logo": str(data.get("remove_logo") or "").strip(),
-        "hours_summary": (data.get("hours_summary") or "").strip(),
-        "hours_monday_friday": (data.get("hours_monday_friday") or "").strip(),
-        "hours_saturday": (data.get("hours_saturday") or "").strip(),
-        "hours_sunday": (data.get("hours_sunday") or "").strip(),
-        "welcome_message": (data.get("welcome_message") or "").strip(),
-        "fallback_message": (data.get("fallback_message") or "").strip(),
-    }
-
-    def config_response(error: str, status_code: int = 400) -> HTMLResponse:
-        preview_business = dict(business)
-        preview_business.update(
-            {
-                "name": form_data["name"] or business.get("name", ""),
-                "sector": form_data["sector"] or business.get("sector", ""),
-                "phone": form_data["phone"] or business.get("phone", ""),
-                "address": form_data["address"] or business.get("address", ""),
-                "logo_path": form_data["logo_path"] or business.get("logo_path", ""),
-                "hours": {
-                    **dict(business.get("hours", {})),
-                    "summary": form_data["hours_summary"] or business.get("hours", {}).get("summary", ""),
-                    "monday_friday": form_data["hours_monday_friday"] or business.get("hours", {}).get("monday_friday", ""),
-                    "saturday": form_data["hours_saturday"] or business.get("hours", {}).get("saturday", ""),
-                    "sunday": form_data["hours_sunday"] or business.get("hours", {}).get("sunday", ""),
-                },
-                "messages": {
-                    **dict(business.get("messages", {})),
-                    "welcome": form_data["welcome_message"] or business.get("messages", {}).get("welcome", ""),
-                    "fallback": form_data["fallback_message"] or business.get("messages", {}).get("fallback", ""),
-                },
-            }
-        )
-        return templates.TemplateResponse(
-            request,
-            "config_negocio.html",
-            business_form_context(
-                request,
-                business=preview_business,
-                form_data=form_data,
-                form_action="/config/negocio",
-                page_title="Datos del negocio",
-                page_subtitle="Lo básico del salón para no tener que tocar archivos en cambios normales.",
-                submit_label="Guardar negocio",
-                error=error,
-            ),
-            status_code=status_code,
-        )
-
-    if not form_data["name"]:
-        return config_response("Necesito un nombre para guardar la ficha del negocio.")
-    if not form_data["phone"]:
-        return config_response("Indica un teléfono principal del negocio.")
-    if not is_valid_phone(form_data["phone"]):
-        return config_response("Indica un teléfono válido. Puedes escribirlo con espacios o +34 y lo normalizo al guardar.")
-    if not form_data["address"]:
-        return config_response("Indica una dirección o referencia clara para el negocio.")
-    if not form_data["hours_summary"]:
-        return config_response("Añade un resumen corto de horarios para que el chat lo pueda mostrar bien.")
-
-    for field_name, raw_value in (
-        ("lunes a viernes", form_data["hours_monday_friday"]),
-        ("sábado", form_data["hours_saturday"]),
-        ("domingo", form_data["hours_sunday"]),
-    ):
-        if not raw_value:
-            return config_response(f"Indica el horario de {field_name} o escribe 'cerrado'.")
-        if not is_valid_business_schedule(raw_value):
-            return config_response(
-                f"El horario de {field_name} debe ir como 09:30-19:30 o como 'cerrado'."
-            )
-
-    if not form_data["welcome_message"]:
-        return config_response("Deja al menos un saludo base para el chat.")
-    if not form_data["fallback_message"]:
-        return config_response("Deja un mensaje base para cuando el chat no entienda algo.")
-
-    logo_path = str(business.get("logo_path") or "")
-    if form_data["remove_logo"] in {"1", "on", "true", "sí", "si"}:
-        remove_branding_logo(logo_path)
-        logo_path = ""
-    if logo_upload:
-        uploaded_logo_path, logo_error = await save_branding_logo(logo_upload, logo_path)
-        if logo_error:
-            return config_response(logo_error)
-        logo_path = uploaded_logo_path or ""
-
-    upsert_business_overrides(
-        DB_PATH,
-        {
-            "name": form_data["name"],
-            "sector": form_data["sector"],
-            "phone": form_data["phone"],
-            "address": form_data["address"],
-            "logo_path": logo_path,
-            "hours": {
-                "summary": form_data["hours_summary"],
-                "monday_friday": form_data["hours_monday_friday"],
-                "saturday": form_data["hours_saturday"],
-                "sunday": form_data["hours_sunday"],
-            },
-            "messages": {
-                "welcome": form_data["welcome_message"],
-                "fallback": form_data["fallback_message"],
-            },
-        },
-        timezone=business.get("timezone", "Atlantic/Canary"),
-    )
-    return RedirectResponse("/config/negocio?saved=1", status_code=303)
-
-
-@app.get("/config/canales/whatsapp", response_class=HTMLResponse)
-def whatsapp_config_page(request: Request, saved: int = 0) -> HTMLResponse:
-    if redirect := require_admin_access(request):
-        return redirect
-    return templates.TemplateResponse(
-        request,
-        "canal_whatsapp.html",
-        {
-            "business": get_business(),
-            "channel": get_channel(DB_PATH, "whatsapp") or default_channel("whatsapp"),
-            "modes": CHANNEL_MODES,
-            "saved": bool(saved),
-            "active_page": "config",
-            "config_section": "whatsapp",
-        },
-    )
-
-
-@app.post("/config/canales/whatsapp")
-async def save_whatsapp_config(request: Request) -> RedirectResponse:
-    if redirect := require_admin_access(request):
-        return redirect
-    data = await read_form_data(request)
-    business = get_business()
-    upsert_channel(
-        DB_PATH,
-        channel_type="whatsapp",
-        active=data.get("activo") == "on",
-        mode=data.get("modo", "demo"),
-        phone=data.get("telefono"),
-        display_name=data.get("nombre_visible"),
-        config_json=data.get("config_json"),
-        timezone=business.get("timezone", "Atlantic/Canary"),
-    )
-    return RedirectResponse("/config/canales/whatsapp?saved=1", status_code=303)
-
-
-@app.get("/health")
-def health() -> dict:
-    return {"status": "ok"}

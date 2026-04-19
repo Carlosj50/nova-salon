@@ -26,6 +26,7 @@
         {% endif %}
 
         <form method="post" action="{{ form_action }}">
+          {% include "_csrf_input.html" %}
           <input type="hidden" name="return_to" value="{{ form_data.return_to }}">
 
           <div class="locked-card">

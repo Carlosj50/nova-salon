@@ -144,6 +144,7 @@ def build_repeat_context(
     business: dict[str, Any],
     service_id: str | None,
     repeat_from: str | None,
+    time: str | None = None,
 ) -> dict[str, Any] | None:
     clean_service_id = str(service_id or "").strip()
     if not clean_service_id:
@@ -176,10 +177,16 @@ def build_repeat_context(
 
     recommended = next((item for item in options if item["recommended"]), options[0])
     category = str(service.get("category_name") or service.get("category") or "").strip()
+    clean_time = str(time or "").strip()
+    try:
+        datetime.strptime(clean_time, "%H:%M")
+    except ValueError:
+        clean_time = ""
     return {
         "service_name": str(service.get("name") or "").strip(),
         "base_date": base_date.isoformat(),
         "base_date_display": format_date_label(base_date.isoformat()),
+        "source_time": clean_time,
         "recommended_date": str(recommended["date"]),
         "recommended_display": str(recommended["display"]),
         "recommended_offset": int(recommended["offset"]),

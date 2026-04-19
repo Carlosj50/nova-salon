@@ -60,6 +60,7 @@
                       <div class="status-actions">
                         <a class="button-link compact-button" href="/servicios/{{ service.id }}/editar">Editar</a>
                         <form method="post" action="/servicios/{{ service.id }}/activo?activo={% if service.active %}0{% else %}1{% endif %}">
+                          {% include "_csrf_input.html" %}
                           <button type="submit" class="{% if service.active %}button-danger{% else %}button-success{% endif %}">
                             {% if service.active %}Desactivar{% else %}Activar{% endif %}
                           </button>

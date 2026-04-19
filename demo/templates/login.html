@@ -35,6 +35,7 @@
         {% endif %}
 
         <form method="post" action="/login" class="auth-form">
+          {% include "_csrf_input.html" %}
           <input type="hidden" name="next" value="{{ next_path }}">
 
           <label>

@@ -68,11 +68,13 @@
                   </div>
                   <div class="ops-list-actions">
                     <form method="post" action="{{ item.confirm_href }}">
+                      {% include "_csrf_input.html" %}
                       <button type="submit" class="quick-primary">Confirmar</button>
                     </form>
                     <a class="button-link compact-button" href="{{ item.edit_href }}">Editar</a>
                     {% for move in item.reschedule_actions %}
                       <form method="post" action="{{ move.href }}">
+                        {% include "_csrf_input.html" %}
                         <button type="submit" class="{{ move.class_name }}">{{ move.label }}</button>
                       </form>
                     {% endfor %}
@@ -102,15 +104,18 @@
                 <a class="button-link compact-button" href="{{ operational_focus.next_item.customer_href }}">Ver cliente</a>
                 {% for move in operational_focus.next_item.reschedule_actions %}
                   <form method="post" action="{{ move.href }}">
+                    {% include "_csrf_input.html" %}
                     <button type="submit" class="{{ move.class_name }}">{{ move.label }}</button>
                   </form>
                 {% endfor %}
                 {% if operational_focus.next_item.estado == 'pendiente' %}
                   <form method="post" action="{{ operational_focus.next_item.confirm_href }}">
+                    {% include "_csrf_input.html" %}
                     <button type="submit" class="quick-primary">Confirmar</button>
                   </form>
                 {% elif operational_focus.next_item.estado == 'confirmada' %}
                   <form method="post" action="{{ operational_focus.next_item.complete_href }}">
+                    {% include "_csrf_input.html" %}
                     <button type="submit" class="button-success">Completar</button>
                   </form>
                 {% endif %}
@@ -219,10 +224,8 @@
           <table>
             <thead>
               <tr>
-                <th>Fecha</th>
-                <th>Hora</th>
-                <th>Cliente</th>
-                <th>Teléfono</th>
+                <th>Cita</th>
+                <th>Clienta</th>
                 <th>Servicio</th>
                 <th>Estado</th>
                 <th>Acciones</th>
@@ -234,24 +237,29 @@
                   data-search="{{ appointment.search_text }}"
                   class="{% if appointment.estado == 'pendiente' and appointment.fecha == operational_focus.target_date %}row-needs-attention{% elif appointment.fecha == operational_focus.target_date %}row-in-focus{% endif %}"
                 >
-                  <td>
-                    <strong>{{ appointment.fecha_display }}</strong>
+                  <td class="appointment-when">
+                    <strong class="appointment-primary">{{ appointment.hora }}</strong>
+                    <span class="appointment-secondary">{{ appointment.fecha_display }}</span>
+                  </td>
+                  <td class="appointment-customer">
+                    <a class="appointment-primary" href="/clientes/{{ appointment.cliente_id }}">{{ appointment.cliente_nombre }}</a>
+                    <span class="appointment-secondary">{{ appointment.cliente_telefono }}</span>
+                  </td>
+                  <td class="appointment-service">
+                    <strong class="appointment-primary">{{ appointment.servicio }}</strong>
                     {% if appointment.franja %}
                       <span class="cell-note">{{ appointment.franja }}</span>
                     {% endif %}
                   </td>
-                  <td>{{ appointment.hora }}</td>
-                  <td><a href="/clientes/{{ appointment.cliente_id }}">{{ appointment.cliente_nombre }}</a></td>
-                  <td>{{ appointment.cliente_telefono }}</td>
-                  <td>{{ appointment.servicio }}</td>
-                  <td><span class="badge state-{{ appointment.estado }}">{{ appointment.estado }}</span></td>
-                  <td>
+                  <td class="appointment-state"><span class="badge state-{{ appointment.estado }}">{{ appointment.estado }}</span></td>
+                  <td class="appointment-actions">
                     <div class="action-stack">
                       <div class="status-actions action-row action-row-primary">
                         <a class="button-link compact-button" href="/citas/{{ appointment.id }}/editar?return_to={{ current_path|urlencode }}">Editar</a>
                         {% if appointment.actions %}
                           {% for state, label in appointment.actions %}
                             <form method="post" action="/citas/{{ appointment.id }}/estado?estado={{ state }}&return_to={{ current_path|urlencode }}">
+                              {% include "_csrf_input.html" %}
                               <button
                                 type="submit"
                                 class="{% if state == 'confirmada' %}quick-primary{% elif state == 'completada' %}button-success{% elif state == 'cancelada' %}button-danger{% else %}button-neutral{% endif %}"
@@ -264,6 +272,7 @@
                         <div class="status-actions action-row action-row-secondary">
                           {% for move in appointment.reschedule_actions %}
                             <form method="post" action="{{ move.href }}">
+                              {% include "_csrf_input.html" %}
                               <button type="submit" class="{{ move.class_name }}">{{ move.label }}</button>
                             </form>
                           {% endfor %}

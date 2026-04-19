@@ -33,6 +33,7 @@ Demo local de atención automática para peluquería / estética. El objetivo es
 - Gestión simple de personal y capacidad base en `/personal`.
 - Configuración básica del negocio editable desde interfaz en `/config/negocio`.
 - Nombre y logo del negocio editables desde `/config/negocio`, con reflejo directo en cabecera y login.
+- La subida de logo acepta PNG, JPG/JPEG o WEBP hasta 5 MB. SVG queda fuera para reducir una superficie innecesaria en un panel interno simple.
 - Centro de configuración en `/config` para ubicar negocio, WhatsApp, servicios y personal sin perderse entre pantallas.
 - Configuración de canales en SQLite, empezando por WhatsApp.
 - Si el mensaje entra por WhatsApp con número conocido, el sistema reconoce a la clienta, reutiliza su ficha y no vuelve a pedir teléfono.
@@ -44,7 +45,7 @@ Demo local de atención automática para peluquería / estética. El objetivo es
 ```text
 demo/        app web, lógica del asistente, SQLite, plantillas y estilos
 demo/core/   núcleo operativo, citas, disponibilidad y lógica conversacional
-demo/web/    contexto web, auth simple y helpers de agenda/formularios
+demo/web/    contexto web, routers web y helpers de agenda/formularios
 landing/     página comercial simple para enseñar el valor
 docs/        documentación operativa
 scripts/     guion corto de captación
@@ -59,6 +60,8 @@ La app sigue siendo pequeña, pero ya no deja todo el peso en dos archivos gigan
   - carga de negocio
   - auth simple
   - sesión del chat
+- `demo/web/routes_public.py` agrupa login, logout, chat público y healthcheck.
+- `demo/web/routes_config.py` agrupa configuración del negocio y del canal WhatsApp.
 - `demo/web/view_helpers.py` agrupa helpers de agenda, formularios y presentación.
 - `demo/core/bot_logic.py` mantiene la orquestación conversacional.
 - `demo/core/chat_booking.py` separa el flujo de reserva.
@@ -72,7 +75,9 @@ Si vas a ejecutar el proyecto desde Windows PowerShell, usa:
 cd H:\servicio_ia_negocios
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn demo.app:app --reload
+.\.venv\Scripts\
+.\.venv\Scripts\python.exe -m uvicorn demo.app:app --reload --host 0.0.0.0 --port 8000
+
 ```
 
 Si lo ejecutas desde WSL/Linux, usa:
@@ -82,6 +87,8 @@ cd /mnt/h/servicio_ia_negocios
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m uvicorn demo.app:app --reload
+.venv/bin/python -m uvicorn demo.app:app --reload --host 0.0.0.0 --port 8000
+
 ```
 
 Abre en el navegador:
@@ -91,6 +98,17 @@ http://127.0.0.1:8000
 ```
 
 La base `demo/data/negocio.db` se crea automáticamente al arrancar la app.
+
+## Artefactos locales
+
+El repo conserva el código, plantillas, datos base y documentación. Se quedan fuera los artefactos de trabajo local:
+
+- `demo/data/negocio.db` y otras bases SQLite generadas en local
+- `demo/data/uploads/` y logos subidos desde configuración
+- `.env` y otros secretos locales
+- `__pycache__/`, logs, zips y temporales de entrega
+
+Si preparas un zip para compartir o revisar, deja fuera `.git`, `.venv`, la base local y los uploads generados.
 
 ## Ejecutar tests
 
@@ -159,18 +177,7 @@ Pantallas de acceso:
 /logout  cerrar sesión
 ```
 
-Configuración base en `demo/data/negocio.json`:
-
-```json
-"auth": {
-  "admin_username": "admin",
-  "admin_password": "nova-demo-2026",
-  "session_secret": "nova-panel-session-secret-2026",
-  "session_cookie": "nova_panel_session"
-}
-```
-
-También puedes sobreescribirlo con variables de entorno:
+La app admite esta configuración por entorno:
 
 ```text
 APP_ADMIN_USERNAME
@@ -179,7 +186,26 @@ APP_SESSION_SECRET
 APP_SESSION_COOKIE
 ```
 
-Antes de enseñar la app fuera de local, cambia al menos contraseña y secreto de sesión.
+Puedes copiar [.env.example](/mnt/h/servicio_ia_negocios/.env.example) a un `.env` local y ajustar ahí tus credenciales de desarrollo sin dejar secretos reales dentro del repo.
+
+En `demo/data/negocio.json` solo quedan valores locales y claramente ficticios:
+
+```json
+"auth": {
+  "admin_username": "admin",
+  "admin_password": "local-dev-change-me",
+  "session_secret": "local-dev-session-secret-change-me",
+  "session_cookie": "nova_panel_session"
+}
+```
+
+Para algo más serio que una demo local:
+
+- usa variables de entorno
+- cambia contraseña y secreto de sesión
+- no reutilices los valores de ejemplo del repo
+
+Los formularios internos del panel ya incluyen protección CSRF básica para reducir envíos cruzados no deseados.
 
 ## Rutas
 
@@ -255,7 +281,7 @@ Ficha de cliente -> Nueva cita para este cliente
 
 La cita manual sale `confirmada` por defecto y ahora comprueba capacidad básica por categoría y solape por duración.
 En nueva/editar cita tienes también un calendario visual y atajos como `Hoy`, `Mañana`, `+7 días` y `+20 días` para poner la fecha con un clic.
-Además, al crear una cita sin cliente fijado puedes localizar a la clienta con una búsqueda rápida por nombre o teléfono y seleccionar el resultado sin recorrer un desplegable largo.
+Además, al crear una cita sin cliente fijado puedes localizar a la clienta con una búsqueda rápida por nombre o teléfono. El listado prioriza coincidencias más cercanas y enseña solo un bloque corto de resultados para que el flujo siga ágil aunque haya más fichas.
 
 Edición rápida:
 
@@ -282,7 +308,7 @@ Repetir cita de una clienta habitual:
 Ficha de cliente -> Historial de citas -> Repetir
 ```
 
-Ese acceso reutiliza cliente, servicio y hora y además propone una fecha rápida razonable con reglas simples:
+Ese acceso reutiliza cliente, servicio y hora, deja esa referencia visible en el formulario y además propone una fecha rápida razonable con reglas simples:
 
 - `uñas` -> `+20 días`
 - `color` -> `+28 días`
@@ -448,6 +474,8 @@ Desde esa misma pantalla puedes:
 - subir uno nuevo
 - sustituirlo
 - quitarlo si hace falta
+
+El logo admite PNG, JPG/JPEG o WEBP y el límite visible actual es de 5 MB.
 
 `demo/data/negocio.json` sigue siendo útil para lo que todavía conviene mantener como base de arranque:
 

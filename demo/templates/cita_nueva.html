@@ -26,17 +26,23 @@
 
       <section class="detail-grid">
         <form class="form-panel" method="post" action="{{ form_action }}">
+          {% include "_csrf_input.html" %}
           <h2>Datos de la cita</h2>
           <input type="hidden" name="return_to" value="{{ form_data.return_to or '/agenda' }}">
 
           {% if repeat_context %}
             <div class="repeat-helper-card">
-              <strong>Propuesta rápida para clienta habitual</strong>
+              <strong>Siguiente cita sugerida</strong>
               <p>
-                Te propongo <strong>{{ repeat_context.recommended_display }}</strong>
-                ({{ repeat_context.recommended_label }})
-                {% if repeat_context.service_name %} para {{ repeat_context.service_name }}{% endif %}.
-                {% if repeat_context.category_label %} He usado una regla simple para {{ repeat_context.category_label|lower }}.{% endif %}
+                Ya he dejado cargados
+                {% if repeat_context.service_name %}<strong>{{ repeat_context.service_name }}</strong>{% else %}el servicio{% endif %}
+                {% if repeat_context.source_time %} a las <strong>{{ repeat_context.source_time }}</strong>{% endif %}.
+                Te propongo <strong>{{ repeat_context.recommended_display }}</strong> ({{ repeat_context.recommended_label }}).
+              </p>
+              <p class="repeat-helper-note">
+                Referencia tomada de la última cita:
+                <strong>{{ repeat_context.base_date_display }}</strong>
+                {% if repeat_context.source_time %} · {{ repeat_context.source_time }}{% endif %}.
               </p>
               <div class="repeat-helper-actions">
                 {% for option in repeat_context.options %}
@@ -44,7 +50,10 @@
                     type="button"
                     class="{% if option.recommended %}is-recommended{% endif %}"
                     data-repeat-date="{{ option.date }}"
-                  >{{ option.label }}</button>
+                  >
+                    <span>{{ option.label }}</span>
+                    <small>{{ option.display }}</small>
+                  </button>
                 {% endfor %}
               </div>
             </div>
@@ -95,6 +104,7 @@
                   </button>
                 {% endfor %}
               </div>
+              <p id="customer-results-meta" class="field-note customer-results-meta">Escribe nombre o teléfono para acotar resultados.</p>
               <p id="customer-no-results" class="empty-inline customer-no-results" hidden>No encuentro esa clienta. Puedes darla de alta abajo sin salir del flujo.</p>
             </div>
 
@@ -238,10 +248,12 @@
       const customerSelectedName = document.querySelector("#customer-selected-name");
       const customerSelectedPhone = document.querySelector("#customer-selected-phone");
       const customerClear = document.querySelector("#customer-clear");
+      const customerResultsMeta = document.querySelector("#customer-results-meta");
       const customerNoResults = document.querySelector("#customer-no-results");
       const customerNameInput = document.querySelector('input[name="nombre"]');
       const customerPhoneInput = document.querySelector('input[name="telefono"]');
       const customerQuickCreate = document.querySelector("#customer-quick-create");
+      const MAX_VISIBLE_CUSTOMERS = 8;
 
       function parseLocalDate(value) {
         if (!value) return null;
@@ -384,15 +396,46 @@
       }
 
       if (customerLookup && customerIdInput && customerResults) {
+        function normalizeLookupText(value) {
+          return (value || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim();
+        }
+
+        function customerMatchScore(button, term) {
+          const rawName = button.dataset.name || "";
+          const rawPhone = button.dataset.phone || "";
+          const rawSearch = button.dataset.search || "";
+          const name = normalizeLookupText(rawName);
+          const phone = normalizeLookupText(rawPhone.replace(/\s+/g, ""));
+          const search = normalizeLookupText(rawSearch);
+          const compactTerm = term.replace(/\s+/g, "");
+
+          if (!term) return 2000;
+          if (phone === compactTerm || name === term) return 0;
+          if (phone.startsWith(compactTerm)) return 1;
+          if (name.startsWith(term)) return 2;
+          if (name.split(" ").some((part) => part.startsWith(term))) return 3;
+          if (search.includes(term)) return 4;
+          return 9999;
+        }
+
         function selectCustomer(button) {
           customerIdInput.value = button.dataset.id;
           customerLookup.value = button.dataset.label || "";
+          customerResultButtons.forEach((item) => {
+            item.classList.toggle("is-selected", item === button);
+            item.setAttribute("aria-selected", item === button ? "true" : "false");
+          });
           if (customerSelected && customerSelectedName && customerSelectedPhone) {
             customerSelected.hidden = false;
             customerSelectedName.textContent = button.dataset.name || "";
             customerSelectedPhone.textContent = button.dataset.phone || "";
           }
           customerResults.hidden = true;
+          if (customerResultsMeta) customerResultsMeta.textContent = "Clienta seleccionada. Puedes cambiarla si hace falta.";
           if (customerNoResults) customerNoResults.hidden = true;
           if (customerQuickCreate) customerQuickCreate.hidden = true;
           if (customerNameInput) {
@@ -408,8 +451,13 @@
         function clearSelectedCustomer() {
           customerIdInput.value = "";
           if (customerSelected) customerSelected.hidden = true;
+          customerResultButtons.forEach((item) => {
+            item.classList.remove("is-selected");
+            item.setAttribute("aria-selected", "false");
+          });
           customerLookup.value = "";
           customerResults.hidden = false;
+          if (customerResultsMeta) customerResultsMeta.textContent = "Escribe nombre o teléfono para acotar resultados.";
           if (customerNoResults) customerNoResults.hidden = true;
           if (customerQuickCreate) customerQuickCreate.hidden = false;
           if (customerNameInput) customerNameInput.disabled = false;
@@ -418,16 +466,45 @@
         }
 
         function filterCustomers() {
-          const term = customerLookup.value.trim().toLowerCase();
+          const term = normalizeLookupText(customerLookup.value);
+          const rankedButtons = Array.from(customerResultButtons)
+            .map((button, index) => ({
+              button,
+              index,
+              score: customerMatchScore(button, term),
+            }))
+            .filter((item) => item.score < 9999)
+            .sort((left, right) => {
+              if (left.score !== right.score) return left.score - right.score;
+              return left.index - right.index;
+            });
+
           let visibleCount = 0;
-          customerResultButtons.forEach((button, index) => {
-            const searchText = button.dataset.search || "";
-            const matches = !term || searchText.includes(term);
-            const show = matches && visibleCount < 8;
-            button.hidden = !show;
-            if (show) visibleCount += 1;
+          rankedButtons.forEach((item) => {
+            const show = visibleCount < MAX_VISIBLE_CUSTOMERS;
+            item.button.hidden = !show;
+            if (show) {
+              customerResults.appendChild(item.button);
+              visibleCount += 1;
+            }
+          });
+          customerResultButtons.forEach((button) => {
+            if (!rankedButtons.some((item) => item.button === button)) {
+              button.hidden = true;
+            }
           });
           customerResults.hidden = false;
+          if (customerResultsMeta) {
+            if (!term) {
+              customerResultsMeta.textContent = `Mostrando ${Math.min(customerResultButtons.length, MAX_VISIBLE_CUSTOMERS)} clientas para empezar rápido.`;
+            } else if (rankedButtons.length > MAX_VISIBLE_CUSTOMERS) {
+              customerResultsMeta.textContent = `Mostrando ${MAX_VISIBLE_CUSTOMERS} de ${rankedButtons.length} coincidencias. Afina un poco más para encontrarla antes.`;
+            } else if (rankedButtons.length > 0) {
+              customerResultsMeta.textContent = `${rankedButtons.length} coincidencia${rankedButtons.length === 1 ? "" : "s"} encontrada${rankedButtons.length === 1 ? "" : "s"}.`;
+            } else {
+              customerResultsMeta.textContent = "Sin coincidencias. Puedes darla de alta justo debajo.";
+            }
+          }
           if (customerNoResults) {
             customerNoResults.hidden = visibleCount > 0 || !term;
           }

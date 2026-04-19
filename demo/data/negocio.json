@@ -188,8 +188,8 @@
   },
   "auth": {
     "admin_username": "admin",
-    "admin_password": "nova-demo-2026",
-    "session_secret": "nova-panel-session-secret-2026",
+    "admin_password": "local-dev-change-me",
+    "session_secret": "local-dev-session-secret-change-me",
     "session_cookie": "nova_panel_session"
   }
 }

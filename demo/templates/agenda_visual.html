@@ -68,11 +68,13 @@
                   </div>
                   <div class="ops-list-actions">
                     <form method="post" action="{{ item.confirm_href }}">
+                      {% include "_csrf_input.html" %}
                       <button type="submit" class="quick-primary">Confirmar</button>
                     </form>
                     <a class="button-link compact-button" href="{{ item.edit_href }}">Editar</a>
                     {% for move in item.reschedule_actions %}
                       <form method="post" action="{{ move.href }}">
+                        {% include "_csrf_input.html" %}
                         <button type="submit" class="{{ move.class_name }}">{{ move.label }}</button>
                       </form>
                     {% endfor %}
@@ -102,6 +104,7 @@
                 <a class="button-link compact-button" href="{{ operational_focus.next_item.customer_href }}">Ver cliente</a>
                 {% for move in operational_focus.next_item.reschedule_actions %}
                   <form method="post" action="{{ move.href }}">
+                    {% include "_csrf_input.html" %}
                     <button type="submit" class="{{ move.class_name }}">{{ move.label }}</button>
                   </form>
                 {% endfor %}

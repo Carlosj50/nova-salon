@@ -29,6 +29,7 @@
 
       <section class="detail-grid">
         <form class="form-panel" method="post" action="{{ form_action }}" enctype="multipart/form-data">
+          {% include "_csrf_input.html" %}
           <h2>Ajustes rápidos</h2>
 
           <section class="branding-panel" aria-label="Identidad del negocio">
@@ -75,8 +76,8 @@
 
           <label>
             <span>Logo del negocio</span>
-            <input name="logo_file" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml">
-            <small class="field-note">Acepta PNG, JPG, WEBP o SVG. Mejor si es una imagen ligera y cuadrada o apaisada. Tamaño máximo: 5 MB.</small>
+            <input name="logo_file" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+            <small class="field-note">Acepta PNG, JPG/JPEG o WEBP. Mejor si es una imagen ligera y cuadrada o apaisada. Tamaño máximo: 5 MB.</small>
           </label>
 
           {% if business.logo_path %}

@@ -62,7 +62,7 @@
           <div class="section-heading">
             <div>
               <h2>Historial de citas</h2>
-              <p>Reserva una nueva cita sin volver a elegir al cliente.</p>
+              <p>Repite la última cita o ajusta una anterior sin volver a buscar a la clienta.</p>
             </div>
             <a class="button-link button-link-primary" href="/citas/nueva?customer_id={{ customer.id }}&return_to=/clientes/{{ customer.id }}">Nueva cita para este cliente</a>
           </div>
@@ -85,18 +85,26 @@
                       <td>{{ appointment.fecha_display }}</td>
                       <td>{{ appointment.hora }}</td>
                       <td>{{ appointment.franja or "—" }}</td>
-                      <td>{{ appointment.servicio }}</td>
+                      <td>
+                        <div class="appointment-service-cell">
+                          <strong>{{ appointment.servicio }}</strong>
+                          {% if loop.first %}
+                            <span class="badge badge-soft">Última cita</span>
+                          {% endif %}
+                        </div>
+                      </td>
                       <td><span class="badge state-{{ appointment.estado }}">{{ appointment.estado }}</span></td>
                       <td>
                         <div class="status-actions">
                           <a class="button-link compact-button" href="/citas/{{ appointment.id }}/editar?return_to=/clientes/{{ customer.id }}">Editar</a>
                           <a
-                            class="button-link compact-button"
+                            class="button-link compact-button {% if loop.first %}button-link-primary{% endif %}"
                             href="{{ appointment.repeat_href }}"
-                          >Repetir</a>
+                          >{% if loop.first %}Repetir última{% else %}Repetir{% endif %}</a>
                           {% if appointment.actions %}
                             {% for state, label in appointment.actions %}
                               <form method="post" action="/citas/{{ appointment.id }}/estado?estado={{ state }}&return_to=/clientes/{{ customer.id }}">
+                                {% include "_csrf_input.html" %}
                                 <button
                                   type="submit"
                                   class="{% if state == 'confirmada' %}quick-primary{% elif state == 'completada' %}button-success{% elif state == 'cancelada' %}button-danger{% else %}button-neutral{% endif %}"

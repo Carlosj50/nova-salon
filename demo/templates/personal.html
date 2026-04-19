@@ -35,6 +35,7 @@
           </div>
         </div>
         <form class="inline-capacity-form" method="post" action="/personal/capacidad">
+          {% include "_csrf_input.html" %}
           <div class="summary-strip">
             {% for category in category_summary %}
               <div class="summary-item">
@@ -87,6 +88,7 @@
                       <div class="status-actions">
                         <a class="button-link compact-button" href="/personal/{{ member.id }}/editar">Editar</a>
                         <form method="post" action="/personal/{{ member.id }}/activo?activo={% if member.active %}0{% else %}1{% endif %}">
+                          {% include "_csrf_input.html" %}
                           <button type="submit" class="{% if member.active %}button-danger{% else %}button-success{% endif %}">
                             {% if member.active %}Desactivar{% else %}Activar{% endif %}
                           </button>

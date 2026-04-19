@@ -942,12 +942,12 @@ h2,
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 780px;
+  min-width: 720px;
 }
 
 th,
 td {
-  padding: 14px 16px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
@@ -989,6 +989,47 @@ td a {
   color: var(--brand-dark);
   font-weight: 800;
   text-decoration: none;
+}
+
+.appointment-primary {
+  display: block;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.28;
+}
+
+a.appointment-primary {
+  color: var(--brand-dark);
+}
+
+.appointment-secondary {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.appointment-when .appointment-primary {
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.appointment-customer {
+  min-width: 180px;
+}
+
+.appointment-service {
+  min-width: 180px;
+}
+
+.appointment-state {
+  white-space: nowrap;
+}
+
+.appointment-actions {
+  width: 1%;
 }
 
 .cell-note {
@@ -1045,8 +1086,8 @@ td a {
 
 .action-stack {
   display: grid;
-  gap: 6px;
-  min-width: 220px;
+  gap: 7px;
+  min-width: 210px;
 }
 
 .action-row {
@@ -1054,8 +1095,17 @@ td a {
 }
 
 .action-row-secondary {
-  padding-top: 6px;
+  padding-top: 7px;
   border-top: 1px dashed rgba(220, 198, 205, 0.9);
+}
+
+.action-row-secondary button {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 750;
+  border-radius: 999px;
+  box-shadow: none;
 }
 
 .status-actions form {
@@ -1166,7 +1216,7 @@ td a {
 }
 
 td:last-child {
-  min-width: 260px;
+  min-width: 238px;
 }
 
 .toolbar {
@@ -1927,6 +1977,10 @@ td:last-child {
   padding-right: 2px;
 }
 
+.customer-results-meta {
+  margin-top: 8px;
+}
+
 .customer-result {
   display: flex;
   align-items: center;
@@ -1940,6 +1994,12 @@ td:last-child {
   color: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.customer-result.is-selected {
+  border-color: var(--brand);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(246, 234, 239, 0.96));
+  box-shadow: 0 0 0 3px rgba(175, 106, 131, 0.1);
 }
 
 .customer-result strong {
@@ -2023,6 +2083,12 @@ td:last-child {
   color: var(--ink-soft);
 }
 
+.repeat-helper-note {
+  margin-top: 0.45rem !important;
+  font-size: 0.94rem;
+  color: var(--ink-muted) !important;
+}
+
 .repeat-helper-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2031,20 +2097,45 @@ td:last-child {
 }
 
 .repeat-helper-actions button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.08rem;
   border: 1px solid var(--line-strong);
   background: #fff;
   color: var(--brand-dark);
   border-radius: 999px;
-  padding: 0.45rem 0.8rem;
+  padding: 0.5rem 0.85rem;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+.repeat-helper-actions button small {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--ink-muted);
 }
 
 .repeat-helper-actions button.is-recommended {
   background: var(--brand-gradient);
   color: white;
   border-color: transparent;
+}
+
+.repeat-helper-actions button.is-recommended small {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.appointment-service-cell {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.badge-soft {
+  background: rgba(197, 142, 163, 0.12);
+  color: var(--brand-dark);
+  border-color: rgba(170, 108, 131, 0.24);
 }
 
 .branding-panel {

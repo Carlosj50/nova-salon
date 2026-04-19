@@ -28,6 +28,7 @@
         {% endif %}
 
         <form method="post" action="{{ form_action }}">
+          {% include "_csrf_input.html" %}
           <label>
             Nombre
             <input name="nombre" type="text" value="{{ form_data.nombre or '' }}" required>
