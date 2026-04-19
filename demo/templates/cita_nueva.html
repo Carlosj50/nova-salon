@@ -10,6 +10,7 @@
     <main class="page-shell">
       <header class="page-header">
         <div>
+          {% include "_panel_brand.html" %}
           <p class="eyebrow">Agenda</p>
           <h1>{{ page_title }}</h1>
           <p class="subtitle">{{ page_subtitle }}</p>
@@ -28,6 +29,27 @@
           <h2>Datos de la cita</h2>
           <input type="hidden" name="return_to" value="{{ form_data.return_to or '/agenda' }}">
 
+          {% if repeat_context %}
+            <div class="repeat-helper-card">
+              <strong>Propuesta rápida para clienta habitual</strong>
+              <p>
+                Te propongo <strong>{{ repeat_context.recommended_display }}</strong>
+                ({{ repeat_context.recommended_label }})
+                {% if repeat_context.service_name %} para {{ repeat_context.service_name }}{% endif %}.
+                {% if repeat_context.category_label %} He usado una regla simple para {{ repeat_context.category_label|lower }}.{% endif %}
+              </p>
+              <div class="repeat-helper-actions">
+                {% for option in repeat_context.options %}
+                  <button
+                    type="button"
+                    class="{% if option.recommended %}is-recommended{% endif %}"
+                    data-repeat-date="{{ option.date }}"
+                  >{{ option.label }}</button>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+
           {% if selected_customer %}
             <input type="hidden" name="customer_id" value="{{ selected_customer.id }}">
             <div class="locked-card">
@@ -36,35 +58,60 @@
             </div>
           {% else %}
             <label>
-              <span>Buscar cliente</span>
-              <input id="customer-filter" type="search" placeholder="Escribe nombre o teléfono para filtrar la lista" autocomplete="off">
-              <span class="field-note">Filtra la lista y quédate con el cliente correcto sin recorrer todo el desplegable.</span>
+              <span>Localizar clienta</span>
+              <input
+                id="customer-lookup"
+                type="search"
+                placeholder="Escribe nombre o teléfono"
+                autocomplete="off"
+                value=""
+              >
+              <input id="customer-id" name="customer_id" type="hidden" value="{{ form_data.customer_id or '' }}">
+              <span class="field-note">Escribe unas letras o parte del teléfono y verás coincidencias rápidas. Si no aparece, la das de alta justo debajo.</span>
             </label>
 
-            <label>
-              <span>Cliente existente</span>
-              <select id="customer-select" name="customer_id">
-                <option value="">Elegir cliente...</option>
+            <div class="customer-picker" aria-live="polite">
+              <div id="customer-selected" class="customer-selected" hidden>
+                <div class="customer-selected-copy">
+                  <strong id="customer-selected-name"></strong>
+                  <span id="customer-selected-phone"></span>
+                </div>
+                <button id="customer-clear" type="button" class="button-link compact-button">Cambiar</button>
+              </div>
+
+              <div id="customer-results" class="customer-results">
                 {% for customer in customers %}
-                  <option value="{{ customer.id }}" data-search="{{ customer.search_text }}" {% if form_data.customer_id == customer.id|string %}selected{% endif %}>
-                    {{ customer.nombre }} · {{ customer.telefono }}
-                  </option>
+                  <button
+                    type="button"
+                    class="customer-result"
+                    data-id="{{ customer.id }}"
+                    data-name="{{ customer.nombre }}"
+                    data-phone="{{ customer.telefono }}"
+                    data-label="{{ customer.nombre }} · {{ customer.telefono }}"
+                    data-search="{{ customer.search_text }}"
+                  >
+                    <strong>{{ customer.nombre }}</strong>
+                    <span>{{ customer.telefono }}</span>
+                  </button>
                 {% endfor %}
-              </select>
-            </label>
+              </div>
+              <p id="customer-no-results" class="empty-inline customer-no-results" hidden>No encuentro esa clienta. Puedes darla de alta abajo sin salir del flujo.</p>
+            </div>
 
-            <div class="inline-separator"><span>o dar de alta rápido</span></div>
+            <div id="customer-quick-create" class="customer-quick-create">
+              <div class="inline-separator"><span>o dar de alta rápido</span></div>
 
-            <label>
-              <span>Nombre</span>
-              <input name="nombre" type="text" value="{{ form_data.nombre or '' }}" placeholder="Nombre del cliente">
-            </label>
+              <label>
+                <span>Nombre</span>
+                <input name="nombre" type="text" value="{{ form_data.nombre or '' }}" placeholder="Nombre del cliente">
+              </label>
 
-            <label>
-              <span>Teléfono</span>
-              <input name="telefono" type="text" value="{{ form_data.telefono or '' }}" placeholder="600 123 123">
-              <span class="field-note">Si ese teléfono ya existe, usaré la ficha existente para evitar duplicados.</span>
-            </label>
+              <label>
+                <span>Teléfono</span>
+                <input name="telefono" type="text" value="{{ form_data.telefono or '' }}" placeholder="600 123 123">
+                <span class="field-note">Si ese teléfono ya existe, usaré la ficha existente para evitar duplicados.</span>
+              </label>
+            </div>
           {% endif %}
 
           <label>
@@ -182,8 +229,19 @@
       const calendarNext = document.querySelector("#calendar-next");
       const shortcutButtons = document.querySelectorAll("[data-offset-days]");
       const flowShortcutButtons = document.querySelectorAll("[data-shift-days], [data-shift-minutes]");
-      const customerFilter = document.querySelector("#customer-filter");
-      const customerSelect = document.querySelector("#customer-select");
+      const repeatShortcutButtons = document.querySelectorAll("[data-repeat-date]");
+      const customerLookup = document.querySelector("#customer-lookup");
+      const customerIdInput = document.querySelector("#customer-id");
+      const customerResults = document.querySelector("#customer-results");
+      const customerResultButtons = document.querySelectorAll(".customer-result");
+      const customerSelected = document.querySelector("#customer-selected");
+      const customerSelectedName = document.querySelector("#customer-selected-name");
+      const customerSelectedPhone = document.querySelector("#customer-selected-phone");
+      const customerClear = document.querySelector("#customer-clear");
+      const customerNoResults = document.querySelector("#customer-no-results");
+      const customerNameInput = document.querySelector('input[name="nombre"]');
+      const customerPhoneInput = document.querySelector('input[name="telefono"]');
+      const customerQuickCreate = document.querySelector("#customer-quick-create");
 
       function parseLocalDate(value) {
         if (!value) return null;
@@ -313,18 +371,99 @@
           });
         });
 
+        repeatShortcutButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            const nextDate = parseLocalDate(button.dataset.repeatDate);
+            if (nextDate) {
+              setSelectedDate(nextDate);
+            }
+          });
+        });
+
         renderCalendar();
       }
 
-      if (customerFilter && customerSelect) {
-        customerFilter.addEventListener("input", () => {
-          const term = customerFilter.value.trim().toLowerCase();
-          Array.from(customerSelect.options).forEach((option, index) => {
-            if (index === 0) return;
-            const searchText = option.dataset.search || option.textContent.toLowerCase();
-            option.hidden = term ? !searchText.includes(term) : false;
+      if (customerLookup && customerIdInput && customerResults) {
+        function selectCustomer(button) {
+          customerIdInput.value = button.dataset.id;
+          customerLookup.value = button.dataset.label || "";
+          if (customerSelected && customerSelectedName && customerSelectedPhone) {
+            customerSelected.hidden = false;
+            customerSelectedName.textContent = button.dataset.name || "";
+            customerSelectedPhone.textContent = button.dataset.phone || "";
+          }
+          customerResults.hidden = true;
+          if (customerNoResults) customerNoResults.hidden = true;
+          if (customerQuickCreate) customerQuickCreate.hidden = true;
+          if (customerNameInput) {
+            customerNameInput.value = "";
+            customerNameInput.disabled = true;
+          }
+          if (customerPhoneInput) {
+            customerPhoneInput.value = "";
+            customerPhoneInput.disabled = true;
+          }
+        }
+
+        function clearSelectedCustomer() {
+          customerIdInput.value = "";
+          if (customerSelected) customerSelected.hidden = true;
+          customerLookup.value = "";
+          customerResults.hidden = false;
+          if (customerNoResults) customerNoResults.hidden = true;
+          if (customerQuickCreate) customerQuickCreate.hidden = false;
+          if (customerNameInput) customerNameInput.disabled = false;
+          if (customerPhoneInput) customerPhoneInput.disabled = false;
+          customerLookup.focus();
+        }
+
+        function filterCustomers() {
+          const term = customerLookup.value.trim().toLowerCase();
+          let visibleCount = 0;
+          customerResultButtons.forEach((button, index) => {
+            const searchText = button.dataset.search || "";
+            const matches = !term || searchText.includes(term);
+            const show = matches && visibleCount < 8;
+            button.hidden = !show;
+            if (show) visibleCount += 1;
           });
+          customerResults.hidden = false;
+          if (customerNoResults) {
+            customerNoResults.hidden = visibleCount > 0 || !term;
+          }
+        }
+
+        customerResultButtons.forEach((button) => {
+          button.addEventListener("click", () => selectCustomer(button));
         });
+
+        customerLookup.addEventListener("focus", filterCustomers);
+        customerLookup.addEventListener("input", () => {
+          if (customerIdInput.value) {
+            customerIdInput.value = "";
+            if (customerSelected) customerSelected.hidden = true;
+          }
+          filterCustomers();
+        });
+
+        if (customerClear) {
+          customerClear.addEventListener("click", clearSelectedCustomer);
+        }
+
+        const preselectedId = customerIdInput.value;
+        if (preselectedId) {
+          const preselectedButton = Array.from(customerResultButtons).find((button) => button.dataset.id === preselectedId);
+          if (preselectedButton) {
+            selectCustomer(preselectedButton);
+          } else {
+            filterCustomers();
+          }
+        } else {
+          if (customerQuickCreate) customerQuickCreate.hidden = false;
+          if (customerNameInput) customerNameInput.disabled = false;
+          if (customerPhoneInput) customerPhoneInput.disabled = false;
+          filterCustomers();
+        }
       }
     </script>
   </body>

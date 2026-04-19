@@ -10,6 +10,7 @@
     <main class="page-shell">
       <header class="page-header">
         <div>
+          {% include "_panel_brand.html" %}
           <p class="eyebrow">Configuración</p>
           <h1>{{ page_title }}</h1>
           <p class="subtitle">{{ page_subtitle }}</p>
@@ -27,8 +28,26 @@
       {% endif %}
 
       <section class="detail-grid">
-        <form class="form-panel" method="post" action="{{ form_action }}">
+        <form class="form-panel" method="post" action="{{ form_action }}" enctype="multipart/form-data">
           <h2>Ajustes rápidos</h2>
+
+          <section class="branding-panel" aria-label="Identidad del negocio">
+            <div class="branding-panel-copy">
+              <strong>Identidad visible</strong>
+              <p>Nombre y logo para que el panel se sienta más propio del salón sin tocar código.</p>
+            </div>
+            <div class="branding-panel-preview">
+              {% if business.logo_path %}
+                <img src="{{ business.logo_path }}" alt="Logo actual de {{ business.name }}" class="brand-logo-preview">
+              {% else %}
+                <div class="brand-logo-fallback" aria-hidden="true">{{ (form_data.name or business.name or "N")[:1] }}</div>
+              {% endif %}
+              <div class="branding-panel-meta">
+                <strong>{{ form_data.name or business.name }}</strong>
+                <span>{% if business.logo_path %}Logo actual cargado{% else %}Todavía sin logo{% endif %}</span>
+              </div>
+            </div>
+          </section>
 
           <div class="compact-form-grid">
             <label>
@@ -53,6 +72,19 @@
               <input name="address" type="text" value="{{ form_data.address }}" placeholder="Calle Principal 24, Las Palmas">
             </label>
           </div>
+
+          <label>
+            <span>Logo del negocio</span>
+            <input name="logo_file" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml">
+            <small class="field-note">Acepta PNG, JPG, WEBP o SVG. Mejor si es una imagen ligera y cuadrada o apaisada. Tamaño máximo: 5 MB.</small>
+          </label>
+
+          {% if business.logo_path %}
+            <label class="checkbox-row">
+              <input name="remove_logo" type="checkbox" value="1">
+              <span>Quitar logo actual</span>
+            </label>
+          {% endif %}
 
           <label>
             <span>Resumen de horarios</span>
@@ -102,6 +134,10 @@
             <div>
               <dt>Teléfono</dt>
               <dd>{{ business.phone }}</dd>
+            </div>
+            <div>
+              <dt>Logo</dt>
+              <dd>{% if business.logo_path %}<img src="{{ business.logo_path }}" alt="Logo actual de {{ business.name }}" class="brand-logo-mini">{% else %}Sin logo todavía{% endif %}</dd>
             </div>
             <div>
               <dt>Horario corto</dt>

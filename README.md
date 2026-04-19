@@ -32,6 +32,7 @@ Demo local de atención automática para peluquería / estética. El objetivo es
 - Gestión simple de servicios en `/servicios`.
 - Gestión simple de personal y capacidad base en `/personal`.
 - Configuración básica del negocio editable desde interfaz en `/config/negocio`.
+- Nombre y logo del negocio editables desde `/config/negocio`, con reflejo directo en cabecera y login.
 - Centro de configuración en `/config` para ubicar negocio, WhatsApp, servicios y personal sin perderse entre pantallas.
 - Configuración de canales en SQLite, empezando por WhatsApp.
 - Si el mensaje entra por WhatsApp con número conocido, el sistema reconoce a la clienta, reutiliza su ficha y no vuelve a pedir teléfono.
@@ -254,7 +255,7 @@ Ficha de cliente -> Nueva cita para este cliente
 
 La cita manual sale `confirmada` por defecto y ahora comprueba capacidad básica por categoría y solape por duración.
 En nueva/editar cita tienes también un calendario visual y atajos como `Hoy`, `Mañana`, `+7 días` y `+20 días` para poner la fecha con un clic.
-Además, al crear una cita sin cliente fijado puedes filtrar la lista de clientes por nombre o teléfono antes de elegir.
+Además, al crear una cita sin cliente fijado puedes localizar a la clienta con una búsqueda rápida por nombre o teléfono y seleccionar el resultado sin recorrer un desplegable largo.
 
 Edición rápida:
 
@@ -266,13 +267,28 @@ Ficha de cliente -> Editar
 Puedes cambiar servicio, fecha, hora, estado y notas. La edición vuelve al punto desde el que entraste y mantiene la comprobación básica de disponibilidad.
 También tienes atajos rápidos de recolocación como `Mañana`, `+7 días`, `+30 min` y `+1 h`.
 
+Reprogramación rápida desde agenda:
+
+```text
+Agenda -> +30 min | +1 h | Mañana | +7 días
+Agenda visual -> Atención ahora / Siguiente cita -> +30 min | +1 h | Mañana | +7 días
+```
+
+Estos atajos mueven la cita sin pasar por la edición completa, pero siguen usando la misma validación de disponibilidad. Si el nuevo hueco no encaja, la cita no se toca y la agenda muestra el motivo.
+
 Repetir cita de una clienta habitual:
 
 ```text
 Ficha de cliente -> Historial de citas -> Repetir
 ```
 
-Ese acceso reutiliza cliente, servicio y hora para que volver a citar a una habitual requiera menos pasos.
+Ese acceso reutiliza cliente, servicio y hora y además propone una fecha rápida razonable con reglas simples:
+
+- `uñas` -> `+20 días`
+- `color` -> `+28 días`
+- `corte/peinado` -> `+30 días`
+
+Además deja atajos visibles para `+20 días`, `+28 días` y `+30 días`, de forma que se pueda ajustar sin rehacer la cita.
 
 Filtros rápidos en agenda:
 
@@ -411,6 +427,7 @@ Edita directamente desde interfaz:
 En `/config/negocio` ya puedes cambiar:
 
 - nombre del negocio
+- logo del negocio
 - sector
 - teléfono principal
 - dirección
@@ -422,6 +439,15 @@ En `/config/negocio` ya puedes cambiar:
 - mensaje base cuando no entiende algo
 
 Eso se guarda en SQLite como configuración editable y se aplica encima de la base del proyecto.
+
+El logo se guarda como archivo local en `demo/data/uploads/branding/` y la app conserva solo su ruta en la configuración editable de SQLite.
+
+Desde esa misma pantalla puedes:
+
+- ver el logo actual
+- subir uno nuevo
+- sustituirlo
+- quitarlo si hace falta
 
 `demo/data/negocio.json` sigue siendo útil para lo que todavía conviene mantener como base de arranque:
 

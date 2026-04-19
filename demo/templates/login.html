@@ -12,6 +12,17 @@
         <header class="page-header auth-header">
           <div>
             <p class="eyebrow">Acceso interno</p>
+            <div class="auth-brand-row">
+              {% if business.logo_path %}
+                <img src="{{ business.logo_path }}" alt="Logo de {{ business.name }}" class="auth-brand-logo">
+              {% else %}
+                <span class="auth-brand-logo-fallback" aria-hidden="true">{{ (business.name or "N")[:1] }}</span>
+              {% endif %}
+              <div class="auth-brand-copy">
+                <span class="auth-brand-kicker">Panel del salón</span>
+                <strong class="auth-brand-name">{{ business.name }}</strong>
+              </div>
+            </div>
             <h1>Entrar al panel</h1>
             <p class="subtitle">Protección simple para agenda, clientes, citas y configuración.</p>
           </div>

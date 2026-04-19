@@ -10,15 +10,22 @@
     <main class="page-shell">
       <header class="page-header">
         <div>
+          {% include "_panel_brand.html" %}
           <p class="eyebrow">Trabajo diario</p>
           <h1>Agenda visual</h1>
-          <p class="subtitle">Vista tipo planning para leer el día de un vistazo, como una agenda de trabajo más natural.</p>
+          <p class="subtitle">Vista por horas para seguir el día de un vistazo.</p>
         </div>
         {% include "_nav.html" %}
       </header>
 
       {% if saved %}
         <div class="notice">Cita guardada correctamente.</div>
+      {% endif %}
+      {% if moved %}
+        <div class="notice">Cita reprogramada correctamente.</div>
+      {% endif %}
+      {% if error_move %}
+        <div class="notice notice-error">{{ error_move }}</div>
       {% endif %}
 
       <section class="summary-strip" aria-label="Resumen rápido">
@@ -45,7 +52,7 @@
           <div class="ops-card-head">
             <div>
               <p class="eyebrow">Atención ahora</p>
-              <h2>{% if operational_focus.is_today %}Lo que pide acción hoy{% else %}Lo que pide acción en {{ operational_focus.target_date_display }}{% endif %}</h2>
+              <h2>{% if operational_focus.is_today %}Pendientes de hoy{% else %}Pendientes · {{ operational_focus.target_date_display }}{% endif %}</h2>
             </div>
             <span class="ops-badge {% if operational_focus.pending_count %}is-alert{% endif %}">
               {{ operational_focus.pending_count }} pendiente{% if operational_focus.pending_count != 1 %}s{% endif %}
@@ -64,6 +71,11 @@
                       <button type="submit" class="quick-primary">Confirmar</button>
                     </form>
                     <a class="button-link compact-button" href="{{ item.edit_href }}">Editar</a>
+                    {% for move in item.reschedule_actions %}
+                      <form method="post" action="{{ move.href }}">
+                        <button type="submit" class="{{ move.class_name }}">{{ move.label }}</button>
+                      </form>
+                    {% endfor %}
                   </div>
                 </div>
               {% endfor %}
@@ -77,7 +89,7 @@
           <div class="ops-card-head">
             <div>
               <p class="eyebrow">Siguiente cita</p>
-              <h2>Qué viene a continuación</h2>
+              <h2>Próxima cita</h2>
             </div>
             <span class="ops-badge">{{ operational_focus.active_count }} activa{% if operational_focus.active_count != 1 %}s{% endif %}</span>
           </div>
@@ -86,13 +98,18 @@
               <strong>{{ operational_focus.next_item.fecha_display }} · {{ operational_focus.next_item.hora }}</strong>
               <p>{{ operational_focus.next_item.cliente_nombre }} · {{ operational_focus.next_item.servicio }}</p>
               <div class="ops-inline-links">
-                <a class="button-link compact-button" href="{{ operational_focus.next_item.edit_href }}">Abrir cita</a>
+                <a class="button-link compact-button" href="{{ operational_focus.next_item.edit_href }}">Editar cita</a>
                 <a class="button-link compact-button" href="{{ operational_focus.next_item.customer_href }}">Ver cliente</a>
+                {% for move in operational_focus.next_item.reschedule_actions %}
+                  <form method="post" action="{{ move.href }}">
+                    <button type="submit" class="{{ move.class_name }}">{{ move.label }}</button>
+                  </form>
+                {% endfor %}
                 <a class="button-link compact-button" href="/agenda?filtro={{ active_filter }}{% if focus_date %}&fecha={{ focus_date }}{% endif %}{% if month_overview.month_token %}&mes={{ month_overview.month_token }}{% endif %}">Abrir lista</a>
               </div>
             </div>
           {% else %}
-            <p class="ops-empty">No hay citas activas en los días visibles. Buen momento para revisar huecos o apuntar una nueva.</p>
+            <p class="ops-empty">No hay citas activas en los días visibles.</p>
           {% endif %}
         </article>
 
@@ -100,7 +117,7 @@
           <div class="ops-card-head">
             <div>
               <p class="eyebrow">Acciones rápidas</p>
-              <h2>Qué conviene hacer ya</h2>
+              <h2>Acciones rápidas</h2>
             </div>
           </div>
           <div class="ops-action-grid">
@@ -129,7 +146,7 @@
         <div class="month-panel-head">
           <div>
             <h2>Vista mensual</h2>
-            <p>Elige el día de referencia y el planning te enseña ese día y los siguientes cercanos.</p>
+            <p>Selecciona un día y revisa la carga de los siguientes.</p>
           </div>
           <div class="month-nav">
             <a class="button-link compact-button" href="{{ month_overview.prev_href }}">Anterior</a>
@@ -180,7 +197,7 @@
       <section class="view-switch" aria-label="Cambiar vista de agenda">
         <div class="view-switch-copy">
           <strong>Vista actual: visual</strong>
-          <span>Más cercana a una agenda de papel, con horas visibles y bloques de cita.</span>
+          <span>Planning por horas con bloques de cita y huecos visibles.</span>
         </div>
         <div class="filter-strip compact-filter-strip">
           {% for view in agenda_views %}
@@ -193,7 +210,7 @@
         <div class="section-heading">
           <div>
             <h2>Planning de trabajo</h2>
-            <p>Lectura rápida por horas, con huecos y carga visible sin perder acceso a editar.</p>
+            <p>Vista por horas con acceso directo a cada cita.</p>
           </div>
           <div class="section-tools">
             <label class="search-box section-search">
@@ -267,7 +284,7 @@
                     </div>
                   {% else %}
                     <div class="planner-day-note" style="grid-row: 1 / span {{ visual_planner.slot_count }};">
-                      Sin citas todavía
+                      Sin citas
                     </div>
                   {% endif %}
                 </div>

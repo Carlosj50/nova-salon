@@ -14,7 +14,7 @@ from .repositories import (
     seed_operational_data,
 )
 
-EDITABLE_BUSINESS_KEYS = ("name", "sector", "phone", "address")
+EDITABLE_BUSINESS_KEYS = ("name", "sector", "phone", "address", "logo_path")
 EDITABLE_HOURS_KEYS = ("summary", "monday_friday", "saturday", "sunday")
 EDITABLE_MESSAGE_KEYS = ("welcome", "fallback")
 

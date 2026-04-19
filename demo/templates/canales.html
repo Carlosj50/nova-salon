@@ -10,6 +10,7 @@
     <main class="page-shell">
       <header class="page-header">
         <div>
+          {% include "_panel_brand.html" %}
           <p class="eyebrow">Configuración</p>
           <h1>Centro de configuración</h1>
           <p class="subtitle">Aquí tienes reunido lo importante del negocio para saber rápido dónde tocar cada cosa.</p>
@@ -22,6 +23,14 @@
       <section class="simple-grid" aria-label="Centro de configuración">
         <article class="info-panel action-panel">
           <h2>Negocio</h2>
+          <div class="config-brand-inline">
+            {% if business.logo_path %}
+              <img src="{{ business.logo_path }}" alt="Logo de {{ business.name }}" class="brand-logo-mini">
+            {% else %}
+              <span class="brand-logo-fallback brand-logo-fallback-small" aria-hidden="true">{{ (business.name or "N")[:1] }}</span>
+            {% endif %}
+            <strong>{{ business.name }}</strong>
+          </div>
           <dl>
             <div>
               <dt>Nombre</dt>

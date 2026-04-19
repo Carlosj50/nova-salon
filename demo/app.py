@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from pathlib import Path
 from secrets import compare_digest
 from time import time
 from typing import Any
+from urllib.parse import quote_plus
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
+from starlette.datastructures import UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.requests import Request
@@ -67,6 +70,7 @@ from .web.view_helpers import (
     build_agenda_operational_focus,
     build_agenda_url,
     build_month_overview,
+    build_quick_reschedule_actions,
     build_visual_planner,
     business_form_context,
     business_today,
@@ -83,6 +87,7 @@ from .web.view_helpers import (
     prepare_customers,
     prepare_service_records,
     prepare_staff_records,
+    build_repeat_context,
     read_form_data,
     read_form_lists,
     redirect_with_saved,
@@ -107,6 +112,10 @@ app.add_middleware(
     max_age=60 * 60 * 10,
 )
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+MEDIA_DIR = BASE_DIR / "data" / "uploads"
+BRANDING_DIR = MEDIA_DIR / "branding"
+BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 init_db(DB_PATH)
 
 
@@ -122,6 +131,53 @@ class ChatResponse(BaseModel):
     reply: str
     intent: str
     appointment_created: bool = False
+
+
+ALLOWED_LOGO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
+ALLOWED_LOGO_CONTENT_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/svg+xml",
+}
+MAX_LOGO_BYTES = 5 * 1024 * 1024
+
+
+def is_logo_upload(value: Any) -> bool:
+    return isinstance(value, UploadFile) and bool((value.filename or "").strip())
+
+
+def remove_branding_logo(logo_path: str | None) -> None:
+    if not logo_path or not logo_path.startswith("/media/branding/"):
+        return
+    logo_file = BRANDING_DIR / Path(logo_path).name
+    if logo_file.exists():
+        logo_file.unlink()
+
+
+async def save_branding_logo(upload: UploadFile, existing_logo_path: str | None = None) -> tuple[str | None, str | None]:
+    filename = Path(upload.filename or "").name
+    extension = Path(filename).suffix.lower()
+    content_type = str(upload.content_type or "").lower()
+    try:
+        if extension not in ALLOWED_LOGO_EXTENSIONS:
+            return None, "El logo debe ser PNG, JPG, WEBP o SVG."
+        if content_type and content_type not in ALLOWED_LOGO_CONTENT_TYPES:
+            return None, "No he podido aceptar ese tipo de imagen. Usa PNG, JPG, WEBP o SVG."
+
+        content = await upload.read()
+        if not content:
+            return None, "No he podido leer el logo que has subido."
+        if len(content) > MAX_LOGO_BYTES:
+            return None, "El logo es demasiado grande. Usa una imagen de hasta 5 MB."
+
+        stored_name = f"logo-{uuid4().hex}{extension}"
+        target = BRANDING_DIR / stored_name
+        target.write_bytes(content)
+        remove_branding_logo(existing_logo_path)
+        return f"/media/branding/{stored_name}", None
+    finally:
+        await upload.close()
 
 
 @app.get("/login", response_class=HTMLResponse, response_model=None)
@@ -220,6 +276,8 @@ def agenda_page(
     fecha: str | None = None,
     mes: str | None = None,
     saved: int = 0,
+    moved: int = 0,
+    error_move: str | None = None,
 ) -> HTMLResponse:
     if redirect := require_admin_access(request):
         return redirect
@@ -241,6 +299,8 @@ def agenda_page(
         selected_date=focus_date,
         month_token=month_token,
     )
+    for appointment in visible_appointments:
+        appointment["reschedule_actions"] = build_quick_reschedule_actions(int(appointment["id"]), current_path)
     month_overview = build_month_overview(
         filtered_appointments,
         month_anchor=month_anchor,
@@ -294,6 +354,8 @@ def agenda_page(
             "focus_date_display": format_date_label(focus_date) if focus_date else "",
             "month_overview": month_overview,
             "saved": bool(saved),
+            "moved": bool(moved),
+            "error_move": error_move or "",
             "active_page": "agenda",
         },
     )
@@ -306,6 +368,8 @@ def agenda_visual_page(
     fecha: str | None = None,
     mes: str | None = None,
     saved: int = 0,
+    moved: int = 0,
+    error_move: str | None = None,
 ) -> HTMLResponse:
     if redirect := require_admin_access(request):
         return redirect
@@ -325,6 +389,8 @@ def agenda_visual_page(
         month_token=month_token,
         route_path="/agenda/visual",
     )
+    for appointment in filtered_appointments:
+        appointment["reschedule_actions"] = build_quick_reschedule_actions(int(appointment["id"]), current_path)
     month_overview = build_month_overview(
         filtered_appointments,
         month_anchor=month_anchor,
@@ -381,6 +447,8 @@ def agenda_visual_page(
             "month_overview": month_overview,
             "visual_planner": visual_planner,
             "saved": bool(saved),
+            "moved": bool(moved),
+            "error_move": error_move or "",
             "active_page": "agenda",
         },
     )
@@ -393,6 +461,67 @@ def change_appointment_status(request: Request, appointment_id: int, estado: str
     if not update_appointment_status(DB_PATH, appointment_id, estado):
         raise HTTPException(status_code=400, detail="Estado de cita no válido")
     return RedirectResponse(normalize_return_to(return_to), status_code=303)
+
+
+@app.post("/citas/{appointment_id}/reprogramar")
+def quick_reschedule_appointment(
+    request: Request,
+    appointment_id: int,
+    move: str,
+    return_to: str | None = None,
+) -> RedirectResponse:
+    if redirect := require_admin_access(request):
+        return redirect
+
+    appointment = get_appointment(DB_PATH, appointment_id)
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+
+    try:
+        base_dt = datetime.fromisoformat(f"{appointment['fecha']}T{appointment['hora']}")
+    except (KeyError, TypeError, ValueError):
+        target = normalize_return_to(return_to)
+        separator = "&" if "?" in target else "?"
+        return RedirectResponse(
+            f"{target}{separator}error_move=No+he+podido+reprogramar+esa+cita.",
+            status_code=303,
+        )
+
+    delta_by_move = {
+        "30m": timedelta(minutes=30),
+        "1h": timedelta(hours=1),
+        "1d": timedelta(days=1),
+        "7d": timedelta(days=7),
+    }
+    delta = delta_by_move.get(move)
+    if not delta:
+        raise HTTPException(status_code=400, detail="Movimiento no válido")
+
+    target_dt = base_dt + delta
+    try:
+        update_customer_appointment(
+            DB_PATH,
+            business=get_business(),
+            appointment_id=appointment_id,
+            date=target_dt.date().isoformat(),
+            time=target_dt.strftime("%H:%M"),
+            service_id=str(appointment.get("servicio_id") or "") or None,
+            service=str(appointment.get("servicio") or ""),
+            status=str(appointment.get("estado") or "pendiente"),
+            notes=str(appointment.get("notas") or "").strip() or None,
+            part_of_day=str(appointment.get("franja") or "").strip() or None,
+        )
+    except AppointmentServiceError as exc:
+        target = normalize_return_to(return_to)
+        separator = "&" if "?" in target else "?"
+        return RedirectResponse(
+            f"{target}{separator}error_move={quote_plus(exc.message)}",
+            status_code=303,
+        )
+
+    target = normalize_return_to(return_to)
+    separator = "&" if "?" in target else "?"
+    return RedirectResponse(f"{target}{separator}moved=1", status_code=303)
 
 
 @app.get("/clientes", response_class=HTMLResponse)
@@ -419,13 +548,27 @@ def customer_detail_page(request: Request, customer_id: int, saved: int = 0, upd
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
     prepared_customer = prepare_customer(customer)
+    appointments = prepare_appointments(list_customer_appointments(DB_PATH, customer_id))
+    for appointment in appointments:
+        params = [
+            f"customer_id={customer_id}",
+            f"return_to=/clientes/{customer_id}",
+        ]
+        if appointment.get("servicio_id"):
+            params.append(f"servicio_id={appointment['servicio_id']}")
+            if appointment.get("fecha"):
+                params.append(f"repeat_from={appointment['fecha']}")
+        if appointment.get("hora"):
+            params.append(f"hora={appointment['hora']}")
+        appointment["repeat_href"] = "/citas/nueva?" + "&".join(params)
+
     return templates.TemplateResponse(
         request,
         "cliente_detalle.html",
         {
             "business": get_business(),
             "customer": prepared_customer,
-            "appointments": prepare_appointments(list_customer_appointments(DB_PATH, customer_id)),
+            "appointments": appointments,
             "appointment_states": APPOINTMENT_STATES,
             "saved": bool(saved),
             "updated": bool(updated),
@@ -959,6 +1102,7 @@ def new_appointment_page(
     fecha: str | None = None,
     servicio_id: str | None = None,
     hora: str | None = None,
+    repeat_from: str | None = None,
 ) -> HTMLResponse:
     if redirect := require_admin_access(request):
         return redirect
@@ -968,7 +1112,14 @@ def new_appointment_page(
     if customer_id and not selected_customer:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
-    prefilled_date = fecha if parse_optional_date(fecha) else business_today(business)
+    repeat_context = build_repeat_context(
+        business=business,
+        service_id=servicio_id,
+        repeat_from=repeat_from,
+    )
+    prefilled_date = fecha if parse_optional_date(fecha) else (
+        repeat_context["recommended_date"] if repeat_context else business_today(business)
+    )
     prefilled_service_id = (servicio_id or "").strip()
     service_ids = {str(service.get("id") or "") for service in service_catalog_options(active_only=True)}
     if prefilled_service_id not in service_ids:
@@ -1005,6 +1156,7 @@ def new_appointment_page(
             page_title="Nueva cita",
             page_subtitle="Alta rápida para mostrador, teléfono o próxima visita.",
             submit_label="Guardar cita",
+            repeat_context=repeat_context,
         ),
     )
 
@@ -1397,6 +1549,7 @@ def business_config_page(request: Request, saved: int = 0) -> HTMLResponse:
         "sector": business.get("sector", ""),
         "phone": business.get("phone", ""),
         "address": business.get("address", ""),
+        "logo_path": business.get("logo_path", ""),
         "hours_summary": business.get("hours", {}).get("summary", ""),
         "hours_monday_friday": business.get("hours", {}).get("monday_friday", ""),
         "hours_saturday": business.get("hours", {}).get("saturday", ""),
@@ -1427,12 +1580,22 @@ async def save_business_config_page(request: Request) -> HTMLResponse | Redirect
         return redirect
 
     business = get_business()
-    data = await read_form_data(request)
+    logo_upload: UploadFile | None = None
+    content_type = str(request.headers.get("content-type") or "")
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        data = {key: str(form.get(key) or "") for key in form.keys() if key != "logo_file"}
+        if is_logo_upload(form.get("logo_file")):
+            logo_upload = form.get("logo_file")
+    else:
+        data = await read_form_data(request)
     form_data = {
         "name": (data.get("name") or "").strip(),
         "sector": (data.get("sector") or "").strip(),
         "phone": (data.get("phone") or "").strip(),
         "address": (data.get("address") or "").strip(),
+        "logo_path": str(business.get("logo_path") or ""),
+        "remove_logo": str(data.get("remove_logo") or "").strip(),
         "hours_summary": (data.get("hours_summary") or "").strip(),
         "hours_monday_friday": (data.get("hours_monday_friday") or "").strip(),
         "hours_saturday": (data.get("hours_saturday") or "").strip(),
@@ -1449,6 +1612,7 @@ async def save_business_config_page(request: Request) -> HTMLResponse | Redirect
                 "sector": form_data["sector"] or business.get("sector", ""),
                 "phone": form_data["phone"] or business.get("phone", ""),
                 "address": form_data["address"] or business.get("address", ""),
+                "logo_path": form_data["logo_path"] or business.get("logo_path", ""),
                 "hours": {
                     **dict(business.get("hours", {})),
                     "summary": form_data["hours_summary"] or business.get("hours", {}).get("summary", ""),
@@ -1507,6 +1671,16 @@ async def save_business_config_page(request: Request) -> HTMLResponse | Redirect
     if not form_data["fallback_message"]:
         return config_response("Deja un mensaje base para cuando el chat no entienda algo.")
 
+    logo_path = str(business.get("logo_path") or "")
+    if form_data["remove_logo"] in {"1", "on", "true", "sí", "si"}:
+        remove_branding_logo(logo_path)
+        logo_path = ""
+    if logo_upload:
+        uploaded_logo_path, logo_error = await save_branding_logo(logo_upload, logo_path)
+        if logo_error:
+            return config_response(logo_error)
+        logo_path = uploaded_logo_path or ""
+
     upsert_business_overrides(
         DB_PATH,
         {
@@ -1514,6 +1688,7 @@ async def save_business_config_page(request: Request) -> HTMLResponse | Redirect
             "sector": form_data["sector"],
             "phone": form_data["phone"],
             "address": form_data["address"],
+            "logo_path": logo_path,
             "hours": {
                 "summary": form_data["hours_summary"],
                 "monday_friday": form_data["hours_monday_friday"],

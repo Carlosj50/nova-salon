@@ -27,7 +27,7 @@ Ahora el sistema:
 - Guarda una referencia estable al servicio para no romper histórico ni disponibilidad al renombrarlo.
 - Permite crear citas manualmente desde agenda o desde ficha de cliente.
 - Permite editar citas existentes de forma rápida.
-- Permite repetir una cita desde la ficha del cliente reutilizando servicio y hora.
+- Permite repetir una cita desde la ficha del cliente reutilizando servicio y hora y proponiendo una fecha rápida razonable.
 - Muestra agenda interna.
 - Añade una vista agenda visual inspirada en agenda de papel.
 - Refuerza la agenda como herramienta diaria con bloques de atención, siguiente cita y acciones rápidas.
@@ -192,7 +192,7 @@ Cobertura actual de la suite mínima:
 - servicio central de creación y edición de citas
 - alta manual de cita desde `/citas/nueva`
 - edición manual de cita desde `/citas/{id}/editar`
-- atajos de mostrador: filtrar cliente en alta manual, repetir cita y recolocar con desplazamientos rápidos
+- atajos de mostrador: localizar clienta en alta manual con búsqueda rápida, repetir cita con propuesta rápida de fecha y reprogramar desde agenda con `+30 min`, `+1 h`, `Mañana` y `+7 días`
 
 ## Núcleo de citas centralizado
 
@@ -327,6 +327,7 @@ Si la persona corrige su nombre de forma explícita, el sistema continúa con pr
 Desde `/config/negocio` ya puedes editar:
 
 - nombre del negocio
+- logo del negocio
 - sector
 - teléfono principal
 - dirección
@@ -337,7 +338,13 @@ Desde `/config/negocio` ya puedes editar:
 - saludo base del chat
 - mensaje base cuando el chat no entiende algo
 
-Eso se guarda en SQLite como configuración editable del negocio.
+Eso se guarda en SQLite como configuración editable del negocio. En el caso del logo, el archivo se guarda de forma local en `demo/data/uploads/branding/` y la configuración solo conserva su ruta pública dentro de la app.
+
+El nombre y el logo se reflejan ahora en:
+
+- la navegación interna
+- el login del panel
+- la propia pantalla de configuración del negocio
 
 Sigue fuera de esta pantalla:
 

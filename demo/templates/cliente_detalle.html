@@ -10,6 +10,7 @@
     <main class="page-shell">
       <header class="page-header">
         <div>
+          {% include "_panel_brand.html" %}
           <p class="eyebrow">Ficha de cliente</p>
           <h1>{{ customer.nombre }}</h1>
           <p class="subtitle">{{ customer.telefono }} · Alta: {{ customer.fecha_alta_display }}</p>
@@ -75,7 +76,7 @@
                     <th>Franja</th>
                     <th>Servicio</th>
                     <th>Estado</th>
-                    <th>Acción</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -91,7 +92,7 @@
                           <a class="button-link compact-button" href="/citas/{{ appointment.id }}/editar?return_to=/clientes/{{ customer.id }}">Editar</a>
                           <a
                             class="button-link compact-button"
-                            href="/citas/nueva?customer_id={{ customer.id }}{% if appointment.servicio_id %}&servicio_id={{ appointment.servicio_id }}{% endif %}{% if appointment.hora %}&hora={{ appointment.hora }}{% endif %}&return_to=/clientes/{{ customer.id }}"
+                            href="{{ appointment.repeat_href }}"
                           >Repetir</a>
                           {% if appointment.actions %}
                             {% for state, label in appointment.actions %}

@@ -21,6 +21,7 @@ from .context import DB_PATH
 
 
 WEEKDAY_LABELS = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
+WEEKDAY_LABELS_FULL = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
 MONTH_LABELS = (
     "enero",
     "febrero",
@@ -45,6 +46,13 @@ AGENDA_FILTERS = (
     ("canceladas", "Canceladas"),
 )
 
+QUICK_RESCHEDULE_MOVES = (
+    ("30m", "+30 min", "button-neutral"),
+    ("1h", "+1 h", "button-neutral"),
+    ("1d", "Mañana", "compact-button"),
+    ("7d", "+7 días", "compact-button"),
+)
+
 
 def business_today(business: dict) -> str:
     timezone = business.get("timezone", "Atlantic/Canary")
@@ -58,7 +66,7 @@ def format_date_label(raw_date: str | None) -> str:
         parsed = date.fromisoformat(raw_date)
     except ValueError:
         return raw_date
-    return f"{WEEKDAY_LABELS[parsed.weekday()]} {parsed.strftime('%d/%m/%Y')}"
+    return f"{WEEKDAY_LABELS_FULL[parsed.weekday()]} {parsed.strftime('%d/%m/%Y')}"
 
 
 def format_datetime_label(raw_datetime: str | None) -> str:
@@ -100,6 +108,85 @@ def prepare_appointments(appointments: list[dict]) -> list[dict]:
         )
         prepared.append(item)
     return prepared
+
+
+def build_quick_reschedule_actions(appointment_id: int, current_path: str) -> list[dict[str, str]]:
+    return [
+        {
+            "move": move,
+            "label": label,
+            "class_name": class_name,
+            "href": f"/citas/{appointment_id}/reprogramar?move={move}&return_to={current_path}",
+        }
+        for move, label, class_name in QUICK_RESCHEDULE_MOVES
+    ]
+
+
+def repeat_default_offset(service: dict[str, Any] | None) -> int:
+    if not service:
+        return 28
+    category = str(service.get("category") or "").strip().lower()
+    if category == "unas":
+        return 20
+    if category == "color":
+        return 28
+    if category == "corte_peinado":
+        return 30
+    return 28
+
+
+def repeat_offset_label(offset: int) -> str:
+    return f"+{offset} días"
+
+
+def build_repeat_context(
+    *,
+    business: dict[str, Any],
+    service_id: str | None,
+    repeat_from: str | None,
+) -> dict[str, Any] | None:
+    clean_service_id = str(service_id or "").strip()
+    if not clean_service_id:
+        return None
+
+    service = get_service_config(DB_PATH, clean_service_id)
+    base_date = parse_optional_date(repeat_from)
+    today_date = date.fromisoformat(business_today(business))
+    if not base_date or base_date < today_date:
+        base_date = today_date
+
+    default_offset = repeat_default_offset(service)
+    option_offsets: list[int] = []
+    for offset in (default_offset, 20, 28, 30):
+        if offset not in option_offsets:
+            option_offsets.append(offset)
+
+    options: list[dict[str, str | int | bool]] = []
+    for offset in option_offsets:
+        target_date = base_date + timedelta(days=offset)
+        options.append(
+            {
+                "offset": offset,
+                "label": repeat_offset_label(offset),
+                "date": target_date.isoformat(),
+                "display": format_date_label(target_date.isoformat()),
+                "recommended": offset == default_offset,
+            }
+        )
+
+    recommended = next((item for item in options if item["recommended"]), options[0])
+    category = str(service.get("category_name") or service.get("category") or "").strip()
+    return {
+        "service_name": str(service.get("name") or "").strip(),
+        "base_date": base_date.isoformat(),
+        "base_date_display": format_date_label(base_date.isoformat()),
+        "recommended_date": str(recommended["date"]),
+        "recommended_display": str(recommended["display"]),
+        "recommended_offset": int(recommended["offset"]),
+        "recommended_label": str(recommended["label"]),
+        "category_label": category,
+        "options": options,
+    }
 
 
 def prepare_customers(customers: list[dict]) -> list[dict]:
@@ -197,6 +284,7 @@ def build_agenda_operational_focus(
             "customer_href": f"/clientes/{item['cliente_id']}",
             "confirm_href": f"/citas/{item['id']}/estado?estado=confirmada&return_to={current_path}",
             "complete_href": f"/citas/{item['id']}/estado?estado=completada&return_to={current_path}",
+            "reschedule_actions": build_quick_reschedule_actions(int(item["id"]), current_path),
         }
 
     next_item = active_items[0] if active_items else (upcoming_items[0] if upcoming_items else None)
@@ -349,6 +437,7 @@ def manual_appointment_context(
     page_subtitle: str = "Alta rápida para mostrador, teléfono o próxima visita.",
     submit_label: str = "Guardar cita",
     error: str | None = None,
+    repeat_context: dict[str, Any] | None = None,
 ) -> dict:
     return {
         "request": request,
@@ -364,6 +453,7 @@ def manual_appointment_context(
         "page_subtitle": page_subtitle,
         "submit_label": submit_label,
         "error": error,
+        "repeat_context": repeat_context,
         "active_page": "agenda",
     }
 

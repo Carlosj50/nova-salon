@@ -77,7 +77,7 @@ def login_redirect_response(next_path: str) -> RedirectResponse:
 
 def require_admin_access(request: Request) -> RedirectResponse | None:
     path = request.url.path
-    if path in PUBLIC_PATHS or path.startswith("/static/"):
+    if path in PUBLIC_PATHS or path.startswith("/static/") or path.startswith("/media/"):
         return None
     if is_internal_path(path) and not is_authenticated(request):
         return login_redirect_response(request_target(request))
