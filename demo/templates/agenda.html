@@ -246,24 +246,28 @@
                   <td>{{ appointment.servicio }}</td>
                   <td><span class="badge state-{{ appointment.estado }}">{{ appointment.estado }}</span></td>
                   <td>
-                    <div class="status-actions">
-                      <a class="button-link compact-button" href="/citas/{{ appointment.id }}/editar?return_to={{ current_path|urlencode }}">Editar</a>
+                    <div class="action-stack">
+                      <div class="status-actions action-row action-row-primary">
+                        <a class="button-link compact-button" href="/citas/{{ appointment.id }}/editar?return_to={{ current_path|urlencode }}">Editar</a>
+                        {% if appointment.actions %}
+                          {% for state, label in appointment.actions %}
+                            <form method="post" action="/citas/{{ appointment.id }}/estado?estado={{ state }}&return_to={{ current_path|urlencode }}">
+                              <button
+                                type="submit"
+                                class="{% if state == 'confirmada' %}quick-primary{% elif state == 'completada' %}button-success{% elif state == 'cancelada' %}button-danger{% else %}button-neutral{% endif %}"
+                              >{{ label }}</button>
+                            </form>
+                          {% endfor %}
+                        {% endif %}
+                      </div>
                       {% if appointment.estado in ['pendiente', 'confirmada'] %}
-                        {% for move in appointment.reschedule_actions %}
-                          <form method="post" action="{{ move.href }}">
-                            <button type="submit" class="{{ move.class_name }}">{{ move.label }}</button>
-                          </form>
-                        {% endfor %}
-                      {% endif %}
-                      {% if appointment.actions %}
-                        {% for state, label in appointment.actions %}
-                          <form method="post" action="/citas/{{ appointment.id }}/estado?estado={{ state }}&return_to={{ current_path|urlencode }}">
-                            <button
-                              type="submit"
-                              class="{% if state == 'confirmada' %}quick-primary{% elif state == 'completada' %}button-success{% elif state == 'cancelada' %}button-danger{% else %}button-neutral{% endif %}"
-                            >{{ label }}</button>
-                          </form>
-                        {% endfor %}
+                        <div class="status-actions action-row action-row-secondary">
+                          {% for move in appointment.reschedule_actions %}
+                            <form method="post" action="{{ move.href }}">
+                              <button type="submit" class="{{ move.class_name }}">{{ move.label }}</button>
+                            </form>
+                          {% endfor %}
+                        </div>
                       {% endif %}
                     </div>
                   </td>
