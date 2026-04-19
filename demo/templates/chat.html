@@ -15,6 +15,11 @@
             <p class="eyebrow">Asistente de reservas</p>
             <h1>{{ business.name }}</h1>
             <p class="subtitle">{{ business.sector }} · {{ business.hours.summary }}</p>
+            <div class="chat-capabilities" aria-label="Qué puedes consultar aquí">
+              <span>Horarios</span>
+              <span>Servicios</span>
+              <span>Pedir cita</span>
+            </div>
           </div>
           <div class="chat-header-side">
             {% include "_nav.html" %}

@@ -11,7 +11,7 @@
       <section class="form-panel auth-card" aria-label="Acceso al panel">
         <header class="page-header auth-header">
           <div>
-            <p class="eyebrow">Acceso interno</p>
+            <p class="eyebrow">Acceso</p>
             <div class="auth-brand-row">
               {% if business.logo_path %}
                 <img src="{{ business.logo_path }}" alt="Logo de {{ business.name }}" class="auth-brand-logo">
@@ -24,9 +24,7 @@
               </div>
             </div>
             <h1>Entrar al panel</h1>
-            <p class="subtitle">Protección simple para agenda, clientes, citas y configuración.</p>
           </div>
-          {% include "_nav.html" %}
         </header>
 
         {% if logged_out %}
