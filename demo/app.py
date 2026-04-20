@@ -116,6 +116,7 @@ def agenda_page(
     saved: int = 0,
     moved: int = 0,
     error_move: str | None = None,
+    forbidden: int = 0,
 ) -> HTMLResponse:
     if redirect := require_admin_access(request):
         return redirect
@@ -161,6 +162,7 @@ def agenda_page(
             "today": today,
             "today_display": format_date_label(today),
             "summary": appointment_summary(appointments, today),
+            "forbidden": bool(forbidden),
             "appointment_states": APPOINTMENT_STATES,
             "agenda_filters": [
                 {
@@ -208,6 +210,7 @@ def agenda_visual_page(
     saved: int = 0,
     moved: int = 0,
     error_move: str | None = None,
+    forbidden: int = 0,
 ) -> HTMLResponse:
     if redirect := require_admin_access(request):
         return redirect
@@ -254,6 +257,7 @@ def agenda_visual_page(
             "today": today,
             "today_display": format_date_label(today),
             "summary": appointment_summary(appointments, today),
+            "forbidden": bool(forbidden),
             "agenda_filters": [
                 {
                     **link,

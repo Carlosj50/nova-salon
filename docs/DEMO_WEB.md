@@ -14,6 +14,8 @@ Ahora el sistema:
 - Protege el panel interno con login simple y sesión por cookie.
 - Reúne la configuración útil del negocio en un centro simple en `/config`.
 - Permite editar datos básicos del negocio desde `/config/negocio`.
+- Permite cambiar el usuario admin y la contraseña del panel desde `/config/acceso` cuando el acceso no está fijado por entorno.
+- Permite gestionar usuarios internos simples con rol `admin` o `staff` desde `/config/usuarios`.
 - Detecta intención de cita.
 - Pide fecha/hora o franja, teléfono, nombre si hace falta y servicio.
 - Normaliza fechas a `YYYY-MM-DD`.
@@ -262,6 +264,8 @@ La base se volverá a crear vacía.
 /clientes/{id}    ficha de cliente con historial
 /config           centro de configuración
 /config/negocio   datos básicos del negocio
+/config/acceso    usuario y contraseña admin
+/config/usuarios  usuarios internos admin/staff
 /config/canales   redirección al centro de configuración
 /config/canales/whatsapp configuración rápida de WhatsApp
 /health           estado técnico
@@ -290,6 +294,8 @@ La demo admite configuración por variables de entorno:
 
 Como base rápida de desarrollo puedes copiar `.env.example` a `.env` y ajustar ahí las credenciales locales.
 
+Si `APP_ADMIN_USERNAME` o `APP_ADMIN_PASSWORD` están definidos en entorno, ese acceso bootstrap manda sobre el panel y la pantalla `/config/acceso` queda en solo lectura para evitar choques entre UI y configuración externa.
+
 En `demo/data/negocio.json` solo quedan valores locales y ficticios:
 
 ```json
@@ -303,8 +309,10 @@ En `demo/data/negocio.json` solo quedan valores locales y ficticios:
 
 Limitaciones de esta fase:
 
-- solo hay una cuenta admin
-- la contraseña sigue siendo simple y se configura por entorno o valores locales de ejemplo
+- siguen existiendo solo dos roles: `admin` y `staff`
+- la contraseña sigue siendo simple si se deja en entorno o config local
+- desde panel se guarda en SQLite con hash y siempre pide la contraseña actual antes de cambiarse
+- no hay permisos finos por pantalla más allá de la división simple admin/staff
 - no hay roles ni permisos avanzados
 - no hay recuperación de contraseña
 - logout sigue siendo por ruta simple
@@ -373,9 +381,47 @@ Sigue fuera de esta pantalla:
 - personal
 - canales
 - estructura base de la demo
-- configuración simple de auth
+- acceso admin técnico
 
 Esas piezas siguen viviendo en sus pantallas propias o en `demo/data/negocio.json` cuando actúa como base de arranque.
+
+## Acceso admin
+
+Desde `/config/acceso` ya puedes:
+
+- ver el usuario admin actual
+- cambiar el usuario admin
+- cambiar la contraseña del panel
+- confirmar la nueva contraseña
+- exigir la contraseña actual antes de guardar
+
+Siguen fuera de la interfaz:
+
+- `session_secret`
+- `session_cookie`
+- otros secretos técnicos del middleware de sesión
+
+## Usuarios internos
+
+Desde `/config/usuarios` ya puedes:
+
+- crear usuario
+- editar usuario
+- cambiar contraseña
+- activar o desactivar acceso
+
+Roles:
+
+- `admin`: acceso completo al panel, incluida configuración, acceso admin y gestión de usuarios
+- `staff`: agenda, clientas y citas para trabajo diario
+
+`staff` no entra en:
+
+- `/config`
+- `/servicios`
+- `/personal`
+- `/config/acceso`
+- `/config/usuarios`
 
 ## Selección de servicios
 

@@ -34,10 +34,10 @@ Demo local de atención automática para peluquería / estética. El objetivo es
 - Configuración básica del negocio editable desde interfaz en `/config/negocio`.
 - Nombre y logo del negocio editables desde `/config/negocio`, con reflejo directo en cabecera y login.
 - La subida de logo acepta PNG, JPG/JPEG o WEBP hasta 5 MB. SVG queda fuera para reducir una superficie innecesaria en un panel interno simple.
-- Centro de configuración en `/config` para ubicar negocio, WhatsApp, servicios y personal sin perderse entre pantallas.
+- Centro de configuración en `/config` para ubicar negocio, acceso admin, WhatsApp, servicios y personal sin perderse entre pantallas.
 - Configuración de canales en SQLite, empezando por WhatsApp.
 - Si el mensaje entra por WhatsApp con número conocido, el sistema reconoce a la clienta, reutiliza su ficha y no vuelve a pedir teléfono.
-- Login simple para proteger el panel interno con una sola cuenta admin.
+- Acceso interno simple con usuarios `admin` y `staff`, más un acceso bootstrap por entorno/config para arranque o emergencia.
 - Landing comercial en `landing/index.html`.
 
 ## Estructura útil
@@ -188,6 +188,8 @@ APP_SESSION_COOKIE
 
 Puedes copiar [.env.example](/mnt/h/servicio_ia_negocios/.env.example) a un `.env` local y ajustar ahí tus credenciales de desarrollo sin dejar secretos reales dentro del repo.
 
+Si `APP_ADMIN_USERNAME` o `APP_ADMIN_PASSWORD` están definidos en entorno, ese acceso bootstrap manda sobre el panel y la pantalla `/config/acceso` queda en solo lectura para evitar ambigüedades.
+
 En `demo/data/negocio.json` solo quedan valores locales y claramente ficticios:
 
 ```json
@@ -211,7 +213,7 @@ Los formularios internos del panel ya incluyen protección CSRF básica para red
 
 ```text
 /                 chat de cliente
-/login            acceso simple al panel interno
+/login            acceso al panel con bootstrap admin o usuario interno
 /logout           cierre de sesión
 /agenda           agenda interna
 /agenda/visual    agenda visual tipo planning
@@ -228,6 +230,8 @@ Los formularios internos del panel ya incluyen protección CSRF básica para red
 /personal/{id}/editar editar persona
 /config           centro de configuración
 /config/negocio   datos básicos del negocio
+/config/acceso    usuario y contraseña admin
+/config/usuarios  usuarios internos admin/staff
 /config/canales   resumen de canales
 /config/canales/whatsapp configuración rápida de WhatsApp
 /health           comprobación técnica
@@ -476,6 +480,25 @@ Desde esa misma pantalla puedes:
 - quitarlo si hace falta
 
 El logo admite PNG, JPG/JPEG o WEBP y el límite visible actual es de 5 MB.
+
+En `/config/acceso` ya puedes:
+
+- ver el usuario admin actual
+- cambiar el usuario admin
+- cambiar la contraseña del panel
+- confirmar la nueva contraseña
+- exigir la contraseña actual antes de guardar
+
+Ahí no entran secretos técnicos de sesión ni nombre de cookie.
+
+En `/config/usuarios` ya puedes:
+
+- crear usuarios internos
+- elegir rol `admin` o `staff`
+- activar o desactivar accesos
+- cambiar contraseña sin mostrar la actual
+
+`staff` entra a agenda, clientas y citas. `admin` mantiene acceso completo, incluida la configuración.
 
 `demo/data/negocio.json` sigue siendo útil para lo que todavía conviene mantener como base de arranque:
 

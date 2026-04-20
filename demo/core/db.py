@@ -125,7 +125,26 @@ def init_db(db_path: Path) -> None:
                 data_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS auth_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                data_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS internal_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL CHECK (role IN ('admin', 'staff')),
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_internal_users_username ON internal_users(username)"
         )
         columns = {
             row["name"]

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }} | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          {% include "_panel_brand.html" %}
+          <p class="eyebrow">Configuración</p>
+          <h1>{{ page_title }}</h1>
+          <p class="subtitle">{{ page_subtitle }}</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% include "_config_nav.html" %}
+
+      {% if error %}
+        <div class="notice notice-error">{{ error }}</div>
+      {% endif %}
+
+      <section class="detail-grid">
+        <form class="form-panel" method="post" action="{{ form_action }}">
+          {% include "_csrf_input.html" %}
+          <h2>Datos del usuario</h2>
+
+          <label>
+            <span>Usuario</span>
+            <input name="username" type="text" value="{{ form_data.username }}" autocomplete="username">
+          </label>
+
+          <label>
+            <span>Rol</span>
+            <select name="role">
+              {% for role in roles %}
+                <option value="{{ role }}" {% if form_data.role == role %}selected{% endif %}>{{ role }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label class="checkbox-row">
+            <input name="active" type="checkbox" value="on" {% if form_data.active == "on" %}checked{% endif %}>
+            <span>Usuario activo</span>
+          </label>
+
+          <div class="compact-form-grid">
+            <label>
+              <span>{% if mode == "edit" %}Nueva contraseña{% else %}Contraseña{% endif %}</span>
+              <input name="new_password" type="password" value="" autocomplete="new-password">
+            </label>
+
+            <label>
+              <span>Confirmar contraseña</span>
+              <input name="confirm_password" type="password" value="" autocomplete="new-password">
+            </label>
+          </div>
+
+          <p class="panel-copy">
+            {% if mode == "edit" %}
+              Deja la contraseña en blanco si no la quieres cambiar.
+            {% else %}
+              La contraseña debe tener al menos 8 caracteres.
+            {% endif %}
+          </p>
+
+          <div class="form-actions">
+            <button class="primary-button" type="submit">{{ submit_label }}</button>
+            <a class="button-link" href="/config/usuarios">Volver a usuarios</a>
+          </div>
+        </form>
+
+        <aside class="info-panel">
+          <h2>Qué puede hacer cada rol</h2>
+          <dl>
+            <div>
+              <dt>Admin</dt>
+              <dd>Acceso completo al panel, configuración y usuarios.</dd>
+            </div>
+            <div>
+              <dt>Staff</dt>
+              <dd>Agenda, clientas y citas para el trabajo diario.</dd>
+            </div>
+            <div>
+              <dt>Fuera para staff</dt>
+              <dd>Configuración crítica, acceso admin y gestión de usuarios.</dd>
+            </div>
+          </dl>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

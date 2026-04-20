@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from secrets import compare_digest
 from time import time
 from uuid import uuid4
 
@@ -12,6 +11,8 @@ from starlette.responses import RedirectResponse
 
 from ..core.bot_logic import handle_message
 from ..core.channels import get_channel
+from ..core.config import verify_admin_password
+from ..core.internal_users import get_internal_user_by_username
 from . import context as web_context
 from . import view_helpers
 
@@ -60,11 +61,32 @@ async def login_submit(request: Request) -> HTMLResponse | RedirectResponse:
     password = data.get("password") or ""
     next_path = web_context.normalize_next_path(data.get("next"))
     auth_settings = web_context.get_auth_settings()
+    internal_user = get_internal_user_by_username(web_context.DB_PATH, username)
+    authenticated = False
+    auth_user = ""
+    auth_role = ""
+    auth_source = ""
 
-    if compare_digest(username, auth_settings["admin_username"]) and compare_digest(password, auth_settings["admin_password"]):
+    if (
+        username == auth_settings["admin_username"]
+        and verify_admin_password(password, auth_settings["admin_password"])
+    ):
+        authenticated = True
+        auth_user = auth_settings["admin_username"]
+        auth_role = "admin"
+        auth_source = str(auth_settings.get("admin_source") or "bootstrap")
+    elif internal_user and internal_user.get("active") and verify_admin_password(password, internal_user["password_hash"]):
+        authenticated = True
+        auth_user = str(internal_user["username"])
+        auth_role = str(internal_user["role"])
+        auth_source = "user"
+
+    if authenticated:
         request.session.clear()
         request.session["is_authenticated"] = True
-        request.session["auth_user"] = auth_settings["admin_username"]
+        request.session["auth_user"] = auth_user
+        request.session["auth_role"] = auth_role
+        request.session["auth_source"] = auth_source
         request.session["auth_at"] = int(time())
         return RedirectResponse(next_path, status_code=303)
 

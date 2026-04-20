@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import re
 from tempfile import TemporaryDirectory
@@ -13,6 +14,7 @@ import demo.web.routes_config as config_routes
 import demo.web.view_helpers as view_helpers
 from demo.core.appointment_service import create_customer_appointment
 from demo.core.config import load_auth_config
+from demo.core.internal_users import create_internal_user
 from demo.core.repositories import (
     find_customer_by_phone,
     get_appointment,
@@ -60,6 +62,22 @@ class WebAuthAndRoutesTests(DemoTestCase):
         self.assertEqual(response.status_code, 303)
         self.assertEqual(response.headers["location"], next_path)
 
+    def login_user(self, username: str, password: str, next_path: str = "/agenda") -> None:
+        login_page = self.client.get("/login", params={"next": next_path})
+        csrf_token = self.extract_csrf_token(login_page.text)
+        response = self.client.post(
+            "/login",
+            data={
+                "csrf_token": csrf_token,
+                "username": username,
+                "password": password,
+                "next": next_path,
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], next_path)
+
     def extract_csrf_token(self, html: str) -> str:
         match = re.search(r'name="csrf_token" value="([^"]+)"', html)
         self.assertIsNotNone(match)
@@ -74,6 +92,48 @@ class WebAuthAndRoutesTests(DemoTestCase):
         response = self.client.get("/agenda", follow_redirects=False)
         self.assertEqual(response.status_code, 303)
         self.assertIn("/login?next=%2Fagenda", response.headers["location"])
+
+    def test_staff_user_can_access_operational_pages_but_not_admin_areas(self) -> None:
+        create_internal_user(
+            self.db_path,
+            username="maria",
+            password="clave-staff-123",
+            role="staff",
+        )
+        self.login_user("maria", "clave-staff-123", "/agenda")
+
+        agenda = self.client.get("/agenda")
+        self.assertEqual(agenda.status_code, 200)
+        self.assertIn("Agenda", agenda.text)
+
+        customers = self.client.get("/clientes")
+        self.assertEqual(customers.status_code, 200)
+        self.assertIn("Clientes", customers.text)
+
+        config = self.client.get("/config", follow_redirects=False)
+        self.assertEqual(config.status_code, 303)
+        self.assertIn("/agenda?forbidden=1", config.headers["location"])
+
+        access = self.client.get("/config/acceso", follow_redirects=False)
+        self.assertEqual(access.status_code, 303)
+        self.assertIn("/agenda?forbidden=1", access.headers["location"])
+
+        services = self.client.get("/servicios", follow_redirects=False)
+        self.assertEqual(services.status_code, 303)
+        self.assertIn("/agenda?forbidden=1", services.headers["location"])
+
+    def test_admin_internal_user_can_access_admin_configuration(self) -> None:
+        create_internal_user(
+            self.db_path,
+            username="encargada",
+            password="clave-admin-123",
+            role="admin",
+        )
+        self.login_user("encargada", "clave-admin-123", "/config")
+
+        response = self.client.get("/config")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Centro de configuración", response.text)
 
     def test_login_and_logout_control_internal_panel(self) -> None:
         login_page = self.client.get("/login", params={"next": "/agenda"})
@@ -457,3 +517,83 @@ class WebAuthAndRoutesTests(DemoTestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("El logo debe ser PNG, JPG/JPEG o WEBP", response.text)
+
+    def test_access_config_updates_admin_username_and_password(self) -> None:
+        self.login_admin("/config/acceso")
+        csrf_token = self.get_csrf_token("/config/acceso")
+
+        response = self.client.post(
+            "/config/acceso",
+            data={
+                "csrf_token": csrf_token,
+                "username": "encargada",
+                "current_password": self.auth["admin_password"],
+                "new_password": "clave-nueva-123",
+                "confirm_password": "clave-nueva-123",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/config/acceso?saved=1")
+
+        self.client.get("/logout", follow_redirects=False)
+        login_page = self.client.get("/login", params={"next": "/agenda"})
+        csrf_token = self.extract_csrf_token(login_page.text)
+        relogin = self.client.post(
+            "/login",
+            data={
+                "csrf_token": csrf_token,
+                "username": "encargada",
+                "password": "clave-nueva-123",
+                "next": "/agenda",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(relogin.status_code, 303)
+        self.assertEqual(relogin.headers["location"], "/agenda")
+
+    def test_access_config_rejects_wrong_current_password(self) -> None:
+        self.login_admin("/config/acceso")
+        csrf_token = self.get_csrf_token("/config/acceso")
+
+        response = self.client.post(
+            "/config/acceso",
+            data={
+                "csrf_token": csrf_token,
+                "username": "admin",
+                "current_password": "mal",
+                "new_password": "clave-nueva-123",
+                "confirm_password": "clave-nueva-123",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("La contraseña actual no coincide", response.text)
+
+    def test_access_config_is_blocked_when_admin_environment_override_is_active(self) -> None:
+        self.login_admin("/config/acceso")
+        with patch.dict(os.environ, {"APP_ADMIN_USERNAME": "env-admin"}, clear=False):
+            response = self.client.get("/config/acceso")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("gestionado por variables de entorno", response.text)
+
+    def test_admin_can_create_internal_staff_user_from_panel(self) -> None:
+        self.login_admin("/config/usuarios/nuevo")
+        csrf_token = self.get_csrf_token("/config/usuarios/nuevo")
+
+        response = self.client.post(
+            "/config/usuarios/nuevo",
+            data={
+                "csrf_token": csrf_token,
+                "username": "recepcion",
+                "role": "staff",
+                "active": "on",
+                "new_password": "clave-staff-123",
+                "confirm_password": "clave-staff-123",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/config/usuarios?saved=1")
+
+        self.client.get("/logout", follow_redirects=False)
+        self.login_user("recepcion", "clave-staff-123", "/agenda")

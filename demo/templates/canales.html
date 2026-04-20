@@ -79,6 +79,44 @@
         </article>
 
         <article class="info-panel action-panel">
+          <h2>Acceso admin</h2>
+          <dl>
+            <div>
+              <dt>Usuario</dt>
+              <dd>{{ auth_settings.admin_username }}</dd>
+            </div>
+            <div>
+              <dt>Origen</dt>
+              <dd>{{ "Entorno" if auth_settings.managed_by_env else ("Panel" if auth_settings.admin_source == "panel" else "Config local") }}</dd>
+            </div>
+            <div>
+              <dt>Uso</dt>
+              <dd>Usuario admin y cambio de contraseña del panel.</dd>
+            </div>
+          </dl>
+          <div class="panel-actions">
+            <a class="button-link button-link-primary" href="/config/acceso">Gestionar acceso</a>
+          </div>
+        </article>
+
+        <article class="info-panel action-panel">
+          <h2>Usuarios</h2>
+          <dl>
+            <div>
+              <dt>Activos</dt>
+              <dd>{{ config_summary.users_active }} de {{ config_summary.users_total }}</dd>
+            </div>
+            <div>
+              <dt>Uso</dt>
+              <dd>Usuarios internos simples con rol admin o staff.</dd>
+            </div>
+          </dl>
+          <div class="panel-actions">
+            <a class="button-link button-link-primary" href="/config/usuarios">Gestionar usuarios</a>
+          </div>
+        </article>
+
+        <article class="info-panel action-panel">
           <h2>Servicios</h2>
           <dl>
             <div>
@@ -128,6 +166,14 @@
           <article class="config-overview-item">
             <strong>WhatsApp</strong>
             <span>Número visible, modo de canal y enlace de contacto.</span>
+          </article>
+          <article class="config-overview-item">
+            <strong>Acceso</strong>
+            <span>Usuario admin y contraseña del panel, sin tocar secretos técnicos.</span>
+          </article>
+          <article class="config-overview-item">
+            <strong>Usuarios</strong>
+            <span>Accesos internos con rol admin o staff para el trabajo diario.</span>
           </article>
           <article class="config-overview-item">
             <strong>Servicios</strong>

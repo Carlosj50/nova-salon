@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Usuarios | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          {% include "_panel_brand.html" %}
+          <p class="eyebrow">Configuración</p>
+          <h1>Usuarios internos</h1>
+          <p class="subtitle">Un acceso pequeño y útil para que admin y staff no compartan la misma cuenta.</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% include "_config_nav.html" %}
+
+      {% if saved %}
+        <div class="notice">Usuario guardado correctamente.</div>
+      {% endif %}
+
+      <section class="table-panel">
+        <div class="section-heading">
+          <div>
+            <h2>Accesos del salón</h2>
+            <p>Admin ve todo. Staff entra a agenda, clientas y citas, pero no a configuración crítica.</p>
+          </div>
+          <a class="button-link button-link-primary" href="/config/usuarios/nuevo">Nuevo usuario</a>
+        </div>
+
+        {% if users %}
+          <div class="table-wrap compact">
+            <table>
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Rol</th>
+                  <th>Estado</th>
+                  <th>Creado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for user in users %}
+                  <tr>
+                    <td><strong>{{ user.username }}</strong></td>
+                    <td><span class="badge badge-soft">{{ user.role }}</span></td>
+                    <td><span class="badge {% if user.active %}state-confirmada{% else %}state-cancelada{% endif %}">{{ "activo" if user.active else "inactivo" }}</span></td>
+                    <td>{{ user.created_at[:10] }}</td>
+                    <td>
+                      <div class="status-actions">
+                        <a class="button-link compact-button" href="/config/usuarios/{{ user.id }}/editar">Editar</a>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="muted">Todavía no hay usuarios internos. Puedes seguir entrando con el acceso admin y crear aquí el primer usuario de trabajo diario.</p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>

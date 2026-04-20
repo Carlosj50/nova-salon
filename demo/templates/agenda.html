@@ -21,6 +21,9 @@
       {% if saved %}
         <div class="notice">Cita guardada correctamente.</div>
       {% endif %}
+      {% if forbidden %}
+        <div class="notice notice-error">Esta zona está reservada a admin. Aquí puedes seguir trabajando con agenda, clientas y citas.</div>
+      {% endif %}
       {% if moved %}
         <div class="notice">Cita reprogramada correctamente.</div>
       {% endif %}

@@ -202,9 +202,9 @@ demo/web/view_helpers.py
 Responsabilidades:
 
 - `app.py`: wiring de FastAPI y rutas internas de agenda, clientes, citas, servicios y personal.
-- `web/context.py`: carga de negocio, auth simple, sesión web y estado corto del chat.
+- `web/context.py`: carga de negocio, auth simple, roles mínimos (`admin` / `staff`), sesión web y estado corto del chat.
 - `web/routes_public.py`: login, logout, chat público y healthcheck.
-- `web/routes_config.py`: configuración del negocio y del canal WhatsApp.
+- `web/routes_config.py`: configuración del negocio, acceso admin, usuarios internos y del canal WhatsApp.
 - `web/view_helpers.py`: helpers de agenda, formularios, calendario mensual y planning visual.
 
 La idea no es crear una arquitectura grande, sino bajar radio de impacto y facilitar cambios futuros sin tocar rutas y helpers en el mismo bloque.

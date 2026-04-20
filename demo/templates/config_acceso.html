@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Acceso | {{ business.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          {% include "_panel_brand.html" %}
+          <p class="eyebrow">Configuración</p>
+          <h1>{{ page_title }}</h1>
+          <p class="subtitle">{{ page_subtitle }}</p>
+        </div>
+        {% include "_nav.html" %}
+      </header>
+
+      {% include "_config_nav.html" %}
+
+      {% if saved %}
+        <div class="notice">Acceso admin actualizado.</div>
+      {% endif %}
+      {% if error %}
+        <div class="notice notice-error">{{ error }}</div>
+      {% endif %}
+
+      <section class="detail-grid">
+        <form class="form-panel" method="post" action="/config/acceso">
+          {% include "_csrf_input.html" %}
+          <h2>Acceso interno</h2>
+
+          {% if managed_by_env %}
+            <div class="notice">
+              Este acceso está gestionado por variables de entorno. Aquí puedes verlo, pero los cambios deben hacerse fuera del panel.
+            </div>
+          {% endif %}
+
+          <label>
+            <span>Usuario admin</span>
+            <input name="username" type="text" value="{{ form_data.username }}" {% if managed_by_env %}disabled{% endif %}>
+          </label>
+
+          <label>
+            <span>Contraseña actual</span>
+            <input name="current_password" type="password" value="" {% if managed_by_env %}disabled{% endif %} autocomplete="current-password">
+            <span class="field-note">La pido antes de guardar para evitar cambios por error.</span>
+          </label>
+
+          <div class="compact-form-grid">
+            <label>
+              <span>Nueva contraseña</span>
+              <input name="new_password" type="password" value="" {% if managed_by_env %}disabled{% endif %} autocomplete="new-password">
+            </label>
+
+            <label>
+              <span>Confirmar nueva contraseña</span>
+              <input name="confirm_password" type="password" value="" {% if managed_by_env %}disabled{% endif %} autocomplete="new-password">
+            </label>
+          </div>
+
+          <p class="panel-copy">
+            Si solo quieres cambiar el usuario, deja la nueva contraseña en blanco. Si cambias la contraseña, debe coincidir la confirmación.
+          </p>
+
+          <div class="form-actions">
+            {% if not managed_by_env %}
+              <button class="primary-button" type="submit">Guardar acceso</button>
+            {% endif %}
+            <a class="button-link" href="/config">Volver al centro</a>
+          </div>
+        </form>
+
+        <aside class="info-panel">
+          <h2>Qué se cambia aquí</h2>
+          <dl>
+            <div>
+              <dt>Usuario actual</dt>
+              <dd>{{ auth_settings.admin_username }}</dd>
+            </div>
+            <div>
+              <dt>Origen</dt>
+              <dd>{{ auth_source_label }}</dd>
+            </div>
+            <div>
+              <dt>Desde panel</dt>
+              <dd>{% if managed_by_env %}No disponible mientras el entorno mande{% else %}Usuario admin y contraseña del panel{% endif %}</dd>
+            </div>
+            <div>
+              <dt>Fuera de UI</dt>
+              <dd>Secretos de sesión, cookie y ajustes técnicos del middleware.</dd>
+            </div>
+          </dl>
+          <p class="panel-copy">
+            La idea es mantener esto pequeño: acceso admin sí, secretos técnicos no.
+          </p>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

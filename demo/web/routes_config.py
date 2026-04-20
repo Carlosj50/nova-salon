@@ -11,7 +11,20 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 from ..core.channels import CHANNEL_MODES, default_channel, get_channel, list_channels, upsert_channel
-from ..core.config import upsert_business_overrides
+from ..core.config import (
+    hash_admin_password,
+    upsert_auth_overrides,
+    upsert_business_overrides,
+    verify_admin_password,
+)
+from ..core.internal_users import (
+    VALID_USER_ROLES,
+    create_internal_user,
+    get_internal_user,
+    get_internal_user_by_username,
+    list_internal_users,
+    update_internal_user,
+)
 from ..core.repositories import is_valid_phone, list_services_config, list_staff_members
 from . import context as web_context
 from . import view_helpers
@@ -30,6 +43,81 @@ ALLOWED_LOGO_CONTENT_TYPES = {
     "image/webp",
 }
 MAX_LOGO_BYTES = 5 * 1024 * 1024
+
+
+def access_panel_context(
+    request: Request,
+    *,
+    business: dict[str, Any],
+    auth_settings: dict[str, Any],
+    form_data: dict[str, str],
+    error: str | None = None,
+    saved: bool = False,
+) -> dict[str, Any]:
+    source_label = {
+        "environment": "Entorno",
+        "panel": "Panel",
+        "config": "Config local",
+    }.get(str(auth_settings.get("admin_source") or ""), "Config local")
+    return {
+        "request": request,
+        "business": business,
+        "page_title": "Acceso admin",
+        "page_subtitle": "Cambia el usuario admin o la contraseña del panel sin tocar secretos técnicos.",
+        "form_data": form_data,
+        "auth_settings": auth_settings,
+        "managed_by_env": bool(auth_settings.get("managed_by_env")),
+        "auth_source_label": source_label,
+        "error": error,
+        "saved": saved,
+        "active_page": "config",
+        "config_section": "access",
+    }
+
+
+def user_panel_context(
+    request: Request,
+    *,
+    business: dict[str, Any],
+    users: list[dict[str, Any]],
+    saved: bool = False,
+) -> dict[str, Any]:
+    return {
+        "request": request,
+        "business": business,
+        "users": users,
+        "saved": saved,
+        "active_page": "config",
+        "config_section": "users",
+    }
+
+
+def user_form_panel_context(
+    request: Request,
+    *,
+    business: dict[str, Any],
+    form_data: dict[str, str],
+    mode: str,
+    form_action: str,
+    page_title: str,
+    page_subtitle: str,
+    submit_label: str,
+    error: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "request": request,
+        "business": business,
+        "form_data": form_data,
+        "mode": mode,
+        "form_action": form_action,
+        "page_title": page_title,
+        "page_subtitle": page_subtitle,
+        "submit_label": submit_label,
+        "roles": VALID_USER_ROLES,
+        "error": error,
+        "active_page": "config",
+        "config_section": "users",
+    }
 
 
 def is_logo_upload(value: Any) -> bool:
@@ -74,13 +162,16 @@ def config_hub_page(request: Request) -> HTMLResponse:
     if redirect := web_context.require_admin_access(request):
         return redirect
     business = web_context.get_business()
+    auth_settings = web_context.get_auth_settings()
     services = list_services_config(web_context.DB_PATH)
     staff_members = list_staff_members(web_context.DB_PATH)
+    users = list_internal_users(web_context.DB_PATH)
     return web_context.templates.TemplateResponse(
         request,
         "canales.html",
         {
             "business": business,
+            "auth_settings": auth_settings,
             "channels": list_channels(web_context.DB_PATH),
             "whatsapp_channel": get_channel(web_context.DB_PATH, "whatsapp") or default_channel("whatsapp"),
             "config_summary": {
@@ -88,6 +179,8 @@ def config_hub_page(request: Request) -> HTMLResponse:
                 "services_active": sum(1 for service in services if service.get("active", True)),
                 "staff_total": len(staff_members),
                 "staff_active": sum(1 for member in staff_members if member.get("active", True)),
+                "users_total": len(users),
+                "users_active": sum(1 for user in users if user.get("active", True)),
             },
             "active_page": "config",
             "config_section": "hub",
@@ -100,6 +193,206 @@ def channel_config_page(request: Request) -> RedirectResponse:
     if redirect := web_context.require_admin_access(request):
         return redirect
     return RedirectResponse("/config", status_code=303)
+
+
+@router.get("/config/usuarios", response_class=HTMLResponse)
+def users_config_page(request: Request, saved: int = 0) -> HTMLResponse:
+    if redirect := web_context.require_admin_access(request):
+        return redirect
+    business = web_context.get_business()
+    users = list_internal_users(web_context.DB_PATH)
+    return web_context.templates.TemplateResponse(
+        request,
+        "config_usuarios.html",
+        user_panel_context(
+            request,
+            business=business,
+            users=users,
+            saved=bool(saved),
+        ),
+    )
+
+
+@router.get("/config/usuarios/nuevo", response_class=HTMLResponse)
+def new_user_config_page(request: Request) -> HTMLResponse:
+    if redirect := web_context.require_admin_access(request):
+        return redirect
+    return web_context.templates.TemplateResponse(
+        request,
+        "config_usuario_form.html",
+        user_form_panel_context(
+            request,
+            business=web_context.get_business(),
+            form_data={
+                "username": "",
+                "role": "staff",
+                "active": "on",
+                "new_password": "",
+                "confirm_password": "",
+            },
+            mode="create",
+            form_action="/config/usuarios/nuevo",
+            page_title="Nuevo usuario",
+            page_subtitle="Crea un acceso interno simple para agenda, clientas y citas.",
+            submit_label="Guardar usuario",
+        ),
+    )
+
+
+@router.post("/config/usuarios/nuevo", response_class=HTMLResponse, response_model=None)
+async def create_user_config_page(request: Request) -> HTMLResponse | RedirectResponse:
+    if redirect := web_context.require_admin_access(request):
+        return redirect
+    data = await view_helpers.read_form_data(request)
+    if invalid := web_context.csrf_failed(request, data.get("csrf_token")):
+        return invalid
+    business = web_context.get_business()
+    auth_settings = web_context.get_auth_settings()
+    form_data = {
+        "username": str(data.get("username") or "").strip(),
+        "role": str(data.get("role") or "staff").strip().lower(),
+        "active": "on" if data.get("active") == "on" else "",
+        "new_password": "",
+        "confirm_password": "",
+    }
+
+    def user_response(error: str, status_code: int = 400) -> HTMLResponse:
+        return web_context.templates.TemplateResponse(
+            request,
+            "config_usuario_form.html",
+            user_form_panel_context(
+                request,
+                business=business,
+                form_data=form_data,
+                mode="create",
+                form_action="/config/usuarios/nuevo",
+                page_title="Nuevo usuario",
+                page_subtitle="Crea un acceso interno simple para agenda, clientas y citas.",
+                submit_label="Guardar usuario",
+                error=error,
+            ),
+            status_code=status_code,
+        )
+
+    new_password = str(data.get("new_password") or "")
+    confirm_password = str(data.get("confirm_password") or "")
+    if not form_data["username"]:
+        return user_response("Indica un usuario para crear el acceso.")
+    if form_data["role"] not in VALID_USER_ROLES:
+        return user_response("Elige un rol válido para este usuario.")
+    if form_data["username"].lower() == str(auth_settings.get("admin_username") or "").strip().lower():
+        return user_response("Ese usuario ya está reservado por el acceso admin actual.")
+    if get_internal_user_by_username(web_context.DB_PATH, form_data["username"]):
+        return user_response("Ya existe un usuario con ese nombre.")
+    if len(new_password) < 8:
+        return user_response("La contraseña debe tener al menos 8 caracteres.")
+    if new_password != confirm_password:
+        return user_response("La confirmación de la contraseña no coincide.")
+
+    create_internal_user(
+        web_context.DB_PATH,
+        username=form_data["username"],
+        password=new_password,
+        role=form_data["role"],
+        active=form_data["active"] == "on",
+        timezone=business.get("timezone", "Atlantic/Canary"),
+    )
+    return RedirectResponse("/config/usuarios?saved=1", status_code=303)
+
+
+@router.get("/config/usuarios/{user_id}/editar", response_class=HTMLResponse)
+def edit_user_config_page(request: Request, user_id: int) -> HTMLResponse:
+    if redirect := web_context.require_admin_access(request):
+        return redirect
+    user = get_internal_user(web_context.DB_PATH, user_id)
+    if not user:
+        return RedirectResponse("/config/usuarios", status_code=303)
+    return web_context.templates.TemplateResponse(
+        request,
+        "config_usuario_form.html",
+        user_form_panel_context(
+            request,
+            business=web_context.get_business(),
+            form_data={
+                "username": str(user["username"]),
+                "role": str(user["role"]),
+                "active": "on" if user.get("active") else "",
+                "new_password": "",
+                "confirm_password": "",
+            },
+            mode="edit",
+            form_action=f"/config/usuarios/{user_id}/editar",
+            page_title="Editar usuario",
+            page_subtitle="Ajusta el rol, el estado o la contraseña sin montar más burocracia.",
+            submit_label="Guardar cambios",
+        ),
+    )
+
+
+@router.post("/config/usuarios/{user_id}/editar", response_class=HTMLResponse, response_model=None)
+async def save_user_config_page(request: Request, user_id: int) -> HTMLResponse | RedirectResponse:
+    if redirect := web_context.require_admin_access(request):
+        return redirect
+    user = get_internal_user(web_context.DB_PATH, user_id)
+    if not user:
+        return RedirectResponse("/config/usuarios", status_code=303)
+    data = await view_helpers.read_form_data(request)
+    if invalid := web_context.csrf_failed(request, data.get("csrf_token")):
+        return invalid
+    business = web_context.get_business()
+    auth_settings = web_context.get_auth_settings()
+    form_data = {
+        "username": str(data.get("username") or "").strip(),
+        "role": str(data.get("role") or "staff").strip().lower(),
+        "active": "on" if data.get("active") == "on" else "",
+        "new_password": "",
+        "confirm_password": "",
+    }
+
+    def user_response(error: str, status_code: int = 400) -> HTMLResponse:
+        return web_context.templates.TemplateResponse(
+            request,
+            "config_usuario_form.html",
+            user_form_panel_context(
+                request,
+                business=business,
+                form_data=form_data,
+                mode="edit",
+                form_action=f"/config/usuarios/{user_id}/editar",
+                page_title="Editar usuario",
+                page_subtitle="Ajusta el rol, el estado o la contraseña sin montar más burocracia.",
+                submit_label="Guardar cambios",
+                error=error,
+            ),
+            status_code=status_code,
+        )
+
+    new_password = str(data.get("new_password") or "")
+    confirm_password = str(data.get("confirm_password") or "")
+    if not form_data["username"]:
+        return user_response("Indica un usuario para guardar los cambios.")
+    if form_data["role"] not in VALID_USER_ROLES:
+        return user_response("Elige un rol válido para este usuario.")
+    if form_data["username"].lower() == str(auth_settings.get("admin_username") or "").strip().lower():
+        return user_response("Ese usuario ya está reservado por el acceso admin actual.")
+    existing = get_internal_user_by_username(web_context.DB_PATH, form_data["username"])
+    if existing and int(existing["id"]) != user_id:
+        return user_response("Ya existe otro usuario con ese nombre.")
+    if (new_password or confirm_password) and len(new_password) < 8:
+        return user_response("La nueva contraseña debe tener al menos 8 caracteres.")
+    if (new_password or confirm_password) and new_password != confirm_password:
+        return user_response("La confirmación de la contraseña no coincide.")
+
+    update_internal_user(
+        web_context.DB_PATH,
+        user_id=user_id,
+        username=form_data["username"],
+        role=form_data["role"],
+        active=form_data["active"] == "on",
+        password=new_password or None,
+        timezone=business.get("timezone", "Atlantic/Canary"),
+    )
+    return RedirectResponse("/config/usuarios?saved=1", status_code=303)
 
 
 @router.get("/config/negocio", response_class=HTMLResponse)
@@ -136,6 +429,98 @@ def business_config_page(request: Request, saved: int = 0) -> HTMLResponse:
             saved=bool(saved),
         ),
     )
+
+
+@router.get("/config/acceso", response_class=HTMLResponse)
+def access_config_page(request: Request, saved: int = 0) -> HTMLResponse:
+    if redirect := web_context.require_admin_access(request):
+        return redirect
+    business = web_context.get_business()
+    auth_settings = web_context.get_auth_settings()
+    form_data = {
+        "username": str(auth_settings.get("admin_username") or ""),
+        "current_password": "",
+        "new_password": "",
+        "confirm_password": "",
+    }
+    return web_context.templates.TemplateResponse(
+        request,
+        "config_acceso.html",
+        access_panel_context(
+            request,
+            business=business,
+            auth_settings=auth_settings,
+            form_data=form_data,
+            saved=bool(saved),
+        ),
+    )
+
+
+@router.post("/config/acceso", response_class=HTMLResponse, response_model=None)
+async def save_access_config_page(request: Request) -> HTMLResponse | RedirectResponse:
+    if redirect := web_context.require_admin_access(request):
+        return redirect
+    business = web_context.get_business()
+    auth_settings = web_context.get_auth_settings()
+    data = await view_helpers.read_form_data(request)
+    if invalid := web_context.csrf_failed(request, data.get("csrf_token")):
+        return invalid
+
+    form_data = {
+        "username": str(data.get("username") or "").strip(),
+        "current_password": "",
+        "new_password": "",
+        "confirm_password": "",
+    }
+
+    def access_response(error: str, status_code: int = 400) -> HTMLResponse:
+        return web_context.templates.TemplateResponse(
+            request,
+            "config_acceso.html",
+            access_panel_context(
+                request,
+                business=business,
+                auth_settings=auth_settings,
+                form_data=form_data,
+                error=error,
+            ),
+            status_code=status_code,
+        )
+
+    if auth_settings.get("managed_by_env"):
+        return access_response("El acceso admin se está gestionando por entorno. Cámbialo fuera del panel.")
+
+    username = form_data["username"]
+    current_password = str(data.get("current_password") or "")
+    new_password = str(data.get("new_password") or "")
+    confirm_password = str(data.get("confirm_password") or "")
+
+    if not username:
+        return access_response("Indica un usuario admin para guardar el acceso.")
+    if not current_password:
+        return access_response("Necesito la contraseña actual para guardar cambios.")
+    if not verify_admin_password(current_password, str(auth_settings.get("admin_password") or "")):
+        return access_response("La contraseña actual no coincide.")
+    if (new_password or confirm_password) and new_password != confirm_password:
+        return access_response("La confirmación de la nueva contraseña no coincide.")
+    if new_password and len(new_password) < 8:
+        return access_response("La nueva contraseña debe tener al menos 8 caracteres.")
+
+    current_username = str(auth_settings.get("admin_username") or "")
+    if username == current_username and not new_password:
+        return access_response("No hay cambios para guardar.")
+
+    payload: dict[str, str] = {"admin_username": username}
+    if new_password:
+        payload["admin_password_hash"] = hash_admin_password(new_password)
+
+    upsert_auth_overrides(
+        web_context.DB_PATH,
+        payload,
+        timezone=business.get("timezone", "Atlantic/Canary"),
+    )
+    request.session["auth_user"] = username
+    return RedirectResponse("/config/acceso?saved=1", status_code=303)
 
 
 @router.post("/config/negocio", response_class=HTMLResponse, response_model=None)

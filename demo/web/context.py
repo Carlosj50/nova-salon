@@ -30,6 +30,11 @@ INTERNAL_PATH_PREFIXES = (
     "/personal",
     "/config",
 )
+ADMIN_ONLY_PATH_PREFIXES = (
+    "/servicios",
+    "/personal",
+    "/config",
+)
 PUBLIC_PATHS = {"/", "/login", "/logout", "/api/chat", "/health"}
 
 
@@ -85,8 +90,8 @@ def get_business() -> dict:
     return load_business_config(CONFIG_PATH, DB_PATH)
 
 
-def get_auth_settings() -> dict[str, str]:
-    return load_auth_config(CONFIG_PATH)
+def get_auth_settings() -> dict[str, Any]:
+    return load_auth_config(CONFIG_PATH, DB_PATH)
 
 
 def is_authenticated(request: Request) -> bool:
@@ -99,8 +104,17 @@ def get_authenticated_user(request: Request) -> str:
     return str(session.get("auth_user") or "")
 
 
+def get_authenticated_role(request: Request) -> str:
+    session = request.scope.get("session", {})
+    return str(session.get("auth_role") or "")
+
+
 def is_internal_path(path: str) -> bool:
     return any(path == prefix or path.startswith(f"{prefix}/") for prefix in INTERNAL_PATH_PREFIXES)
+
+
+def is_admin_only_path(path: str) -> bool:
+    return any(path == prefix or path.startswith(f"{prefix}/") for prefix in ADMIN_ONLY_PATH_PREFIXES)
 
 
 def normalize_next_path(raw_path: str | None, default: str = "/agenda") -> str:
@@ -131,6 +145,8 @@ def require_admin_access(request: Request) -> RedirectResponse | None:
         return None
     if is_internal_path(path) and not is_authenticated(request):
         return login_redirect_response(request_target(request))
+    if is_admin_only_path(path) and get_authenticated_role(request) != "admin":
+        return RedirectResponse("/agenda?forbidden=1", status_code=303)
     return None
 
 
