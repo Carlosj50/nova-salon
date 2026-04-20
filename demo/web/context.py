@@ -22,20 +22,10 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 conversations: dict[str, ConversationState] = {}
 CONVERSATION_IDLE_SECONDS = 30 * 60
-INTERNAL_PATH_PREFIXES = (
-    "/agenda",
-    "/clientes",
-    "/citas",
-    "/servicios",
-    "/personal",
-    "/config",
-)
-ADMIN_ONLY_PATH_PREFIXES = (
-    "/servicios",
-    "/personal",
-    "/config",
-)
-PUBLIC_PATHS = {"/", "/login", "/logout", "/api/chat", "/health"}
+ROLE_LEVELS = {
+    "staff": 1,
+    "admin": 2,
+}
 
 
 def get_or_create_csrf_token(request: Request) -> str:
@@ -109,12 +99,8 @@ def get_authenticated_role(request: Request) -> str:
     return str(session.get("auth_role") or "")
 
 
-def is_internal_path(path: str) -> bool:
-    return any(path == prefix or path.startswith(f"{prefix}/") for prefix in INTERNAL_PATH_PREFIXES)
-
-
-def is_admin_only_path(path: str) -> bool:
-    return any(path == prefix or path.startswith(f"{prefix}/") for prefix in ADMIN_ONLY_PATH_PREFIXES)
+def has_required_role(current_role: str, required_role: str) -> bool:
+    return ROLE_LEVELS.get(current_role, 0) >= ROLE_LEVELS.get(required_role, 0)
 
 
 def normalize_next_path(raw_path: str | None, default: str = "/agenda") -> str:
@@ -139,15 +125,16 @@ def login_redirect_response(next_path: str) -> RedirectResponse:
     return RedirectResponse(f"/login?{urlencode({'next': target})}", status_code=303)
 
 
-def require_admin_access(request: Request) -> RedirectResponse | None:
-    path = request.url.path
-    if path in PUBLIC_PATHS or path.startswith("/static/") or path.startswith("/media/"):
-        return None
-    if is_internal_path(path) and not is_authenticated(request):
+def require_panel_access(request: Request, role: str = "staff") -> RedirectResponse | None:
+    if not is_authenticated(request):
         return login_redirect_response(request_target(request))
-    if is_admin_only_path(path) and get_authenticated_role(request) != "admin":
+    if not has_required_role(get_authenticated_role(request), role):
         return RedirectResponse("/agenda?forbidden=1", status_code=303)
     return None
+
+
+def require_admin_access(request: Request) -> RedirectResponse | None:
+    return require_panel_access(request, role="admin")
 
 
 def prune_conversations(now_ts: float | None = None) -> None:

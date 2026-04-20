@@ -194,6 +194,7 @@ La app web sigue entrando por `demo/app.py`, pero el soporte transversal ya se s
 ```text
 demo/app.py
 demo/web/context.py
+demo/web/routes_agenda.py
 demo/web/routes_public.py
 demo/web/routes_config.py
 demo/web/view_helpers.py
@@ -201,11 +202,21 @@ demo/web/view_helpers.py
 
 Responsabilidades:
 
-- `app.py`: wiring de FastAPI y rutas internas de agenda, clientes, citas, servicios y personal.
-- `web/context.py`: carga de negocio, auth simple, roles mínimos (`admin` / `staff`), sesión web y estado corto del chat.
+- `app.py`: wiring de FastAPI y rutas internas de clientes, citas, servicios y personal.
+- `web/context.py`: carga de negocio en solo lectura, auth simple, roles mínimos (`admin` / `staff`), sesión web y estado corto del chat.
+- `web/routes_agenda.py`: agenda lista, agenda visual y acciones rápidas ligadas al trabajo diario de agenda.
 - `web/routes_public.py`: login, logout, chat público y healthcheck.
 - `web/routes_config.py`: configuración del negocio, acceso admin, usuarios internos y del canal WhatsApp.
+- `core/config.py`: inicialización operativa separada de la lectura normal de configuración y reglas claras para el acceso bootstrap.
 - `web/view_helpers.py`: helpers de agenda, formularios, calendario mensual y planning visual.
+
+La autorización interna sigue siendo deliberadamente pequeña: cada ruta protegida pide acceso operativo o admin de forma explícita, en vez de apoyarse solo en prefijos globales.
+
+El sistema de usuarios internos sigue siendo deliberadamente pequeño:
+
+- dos roles: `admin` y `staff`
+- activación/desactivación en lugar de borrado
+- blindaje simple para no dejar el sistema sin admins internos activos por accidente
 
 La idea no es crear una arquitectura grande, sino bajar radio de impacto y facilitar cambios futuros sin tocar rutas y helpers en el mismo bloque.
 

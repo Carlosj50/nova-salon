@@ -51,6 +51,10 @@ docs/        documentación operativa
 scripts/     guion corto de captación
 ```
 
+Guia visual recomendada para enseñar la app a negocio real:
+
+- [docs/GUIA_VISUAL_USO.md](/mnt/h/servicio_ia_negocios/docs/GUIA_VISUAL_USO.md)
+
 ## Organización interna
 
 La app sigue siendo pequeña, pero ya no deja todo el peso en dos archivos gigantes.
@@ -60,9 +64,11 @@ La app sigue siendo pequeña, pero ya no deja todo el peso en dos archivos gigan
   - carga de negocio
   - auth simple
   - sesión del chat
+- `demo/web/routes_agenda.py` agrupa agenda lista, agenda visual y acciones rápidas ligadas a agenda.
 - `demo/web/routes_public.py` agrupa login, logout, chat público y healthcheck.
-- `demo/web/routes_config.py` agrupa configuración del negocio y del canal WhatsApp.
+- `demo/web/routes_config.py` agrupa configuración del negocio, acceso, usuarios y canal WhatsApp.
 - `demo/web/view_helpers.py` agrupa helpers de agenda, formularios y presentación.
+- La autorización interna se mantiene simple: cada ruta protegida decide si exige acceso operativo (`staff` o `admin`) o acceso admin.
 - `demo/core/bot_logic.py` mantiene la orquestación conversacional.
 - `demo/core/chat_booking.py` separa el flujo de reserva.
 - `demo/core/chat_state.py`, `demo/core/chat_text.py` y `demo/core/chat_channels.py` separan estado, parsing y contexto de canal para bajar fragilidad.
@@ -188,7 +194,21 @@ APP_SESSION_COOKIE
 
 Puedes copiar [.env.example](/mnt/h/servicio_ia_negocios/.env.example) a un `.env` local y ajustar ahí tus credenciales de desarrollo sin dejar secretos reales dentro del repo.
 
-Si `APP_ADMIN_USERNAME` o `APP_ADMIN_PASSWORD` están definidos en entorno, ese acceso bootstrap manda sobre el panel y la pantalla `/config/acceso` queda en solo lectura para evitar ambigüedades.
+La carga normal de negocio ya es solo lectura. La parte que siembra catálogo, personal base y backfill de citas se ejecuta en una inicialización separada al arrancar la app.
+
+El acceso bootstrap por entorno solo manda si están definidas a la vez estas dos variables:
+
+```text
+APP_ADMIN_USERNAME
+APP_ADMIN_PASSWORD
+```
+
+Si falta una de las dos, el sistema ignora ese override parcial para no mezclar usuario y contraseña de fuentes distintas. En ese caso vuelve a usar, por este orden:
+
+1. acceso guardado desde panel
+2. config local
+
+Si las dos variables bootstrap están definidas en entorno, ese acceso manda sobre el panel y la pantalla `/config/acceso` queda en solo lectura para evitar ambigüedades.
 
 En `demo/data/negocio.json` solo quedan valores locales y claramente ficticios:
 
@@ -499,6 +519,13 @@ En `/config/usuarios` ya puedes:
 - cambiar contraseña sin mostrar la actual
 
 `staff` entra a agenda, clientas y citas. `admin` mantiene acceso completo, incluida la configuración.
+La protección ya no depende tanto de prefijos globales: las rutas internas principales declaran directamente si piden acceso operativo o admin.
+
+Blindajes básicos actuales:
+
+- el username del acceso bootstrap actual queda reservado y no se puede reutilizar como usuario interno
+- no se puede degradar o desactivar el último admin interno activo desde panel
+- si todavía no existe ningún admin interno activo, el siguiente usuario interno debe crearse como `admin` activo
 
 `demo/data/negocio.json` sigue siendo útil para lo que todavía conviene mantener como base de arranque:
 

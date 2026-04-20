@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
-from urllib.parse import quote_plus
+from datetime import date, datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -10,11 +9,8 @@ from starlette.requests import Request
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
-from .core.appointment_service import (
-    AppointmentServiceError,
-    create_customer_appointment,
-    update_customer_appointment,
-)
+from .core.appointment_service import AppointmentServiceError, create_customer_appointment, update_customer_appointment
+from .core.config import initialize_business_runtime_data
 from .core.db import init_db
 from .core.models import APPOINTMENT_STATES
 from .core.repositories import (
@@ -27,44 +23,34 @@ from .core.repositories import (
     get_staff_member,
     is_valid_phone,
     list_staff_members,
-    list_appointments,
     list_customer_appointments,
     list_customers,
     list_services_config,
     set_service_active,
     set_staff_active,
     update_category_capacities,
-    update_appointment_status,
     update_customer,
     update_service_config,
     update_staff_member,
 )
 from .web.context import (
     BASE_DIR,
+    CONFIG_PATH,
     DB_PATH,
+    csrf_failed,
     get_auth_settings,
     get_business,
     require_admin_access,
-    csrf_failed,
+    require_panel_access,
     templates,
 )
+from .web.routes_agenda import router as agenda_router
 from .web.routes_config import router as config_router
 from .web.routes_public import router as public_router
 from .web.view_helpers import (
-    AGENDA_FILTERS,
     MANUAL_APPOINTMENT_STATES,
-    agenda_filter_links,
-    agenda_view_links,
-    appointment_summary,
-    apply_agenda_filter,
-    build_agenda_operational_focus,
-    build_agenda_url,
-    build_month_overview,
-    build_quick_reschedule_actions,
-    build_visual_planner,
     business_today,
     customer_form_context,
-    format_date_label,
     manual_appointment_context,
     normalize_return_to,
     parse_optional_date,
@@ -85,7 +71,6 @@ from .web.view_helpers import (
     service_form_context,
     service_id_for_name,
     service_map,
-    sort_agenda_appointments,
     staff_form_context,
 )
 
@@ -102,279 +87,16 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 MEDIA_DIR = BASE_DIR / "data" / "uploads"
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 init_db(DB_PATH)
+initialize_business_runtime_data(CONFIG_PATH, DB_PATH)
 
 app.include_router(public_router)
+app.include_router(agenda_router)
 app.include_router(config_router)
-
-
-@app.get("/agenda", response_class=HTMLResponse)
-def agenda_page(
-    request: Request,
-    filtro: str = "todas",
-    fecha: str | None = None,
-    mes: str | None = None,
-    saved: int = 0,
-    moved: int = 0,
-    error_move: str | None = None,
-    forbidden: int = 0,
-) -> HTMLResponse:
-    if redirect := require_admin_access(request):
-        return redirect
-    business = get_business()
-    appointments = prepare_appointments(sort_agenda_appointments(list_appointments(DB_PATH), business_today(business)))
-    today = business_today(business)
-    active_filter = filtro if filtro in {value for value, _ in AGENDA_FILTERS} else "todas"
-    filtered_appointments = apply_agenda_filter(appointments, active_filter, today)
-    selected_date = parse_optional_date(fecha)
-    fallback_day = selected_date or date.fromisoformat(today)
-    month_anchor = resolve_month_anchor(mes, fallback_day)
-    month_token = month_anchor.strftime("%Y-%m")
-    focus_date = selected_date.isoformat() if selected_date else None
-    visible_appointments = [
-        item for item in filtered_appointments if not focus_date or item.get("fecha") == focus_date
-    ]
-    current_path = build_agenda_url(
-        filtro=active_filter,
-        selected_date=focus_date,
-        month_token=month_token,
-    )
-    for appointment in visible_appointments:
-        appointment["reschedule_actions"] = build_quick_reschedule_actions(int(appointment["id"]), current_path)
-    month_overview = build_month_overview(
-        filtered_appointments,
-        month_anchor=month_anchor,
-        active_filter=active_filter,
-        selected_date=focus_date,
-        today=today,
-        route_path="/agenda",
-    )
-    primary_date = focus_date or today
-    primary_appointments = [item for item in visible_appointments if item.get("fecha") == primary_date]
-    secondary_appointments = [] if focus_date else [item for item in visible_appointments if item.get("fecha") != today]
-    return templates.TemplateResponse(
-        request,
-        "agenda.html",
-        {
-            "business": business,
-            "appointments": visible_appointments,
-            "today_appointments": primary_appointments,
-            "other_appointments": secondary_appointments,
-            "today": today,
-            "today_display": format_date_label(today),
-            "summary": appointment_summary(appointments, today),
-            "forbidden": bool(forbidden),
-            "appointment_states": APPOINTMENT_STATES,
-            "agenda_filters": [
-                {
-                    **link,
-                    "href": build_agenda_url(
-                        filtro=str(link["value"]),
-                        selected_date=focus_date,
-                        month_token=month_token,
-                        route_path="/agenda",
-                    ),
-                }
-                for link in agenda_filter_links(active_filter, route_path="/agenda")
-            ],
-            "agenda_views": agenda_view_links(
-                active_view="list",
-                active_filter=active_filter,
-                selected_date=focus_date,
-                month_token=month_token,
-            ),
-            "active_filter": active_filter,
-            "current_path": current_path,
-            "operational_focus": build_agenda_operational_focus(
-                visible_appointments,
-                today=today,
-                focus_date=focus_date,
-                current_path=current_path,
-            ),
-            "focus_date": focus_date,
-            "focus_date_display": format_date_label(focus_date) if focus_date else "",
-            "month_overview": month_overview,
-            "saved": bool(saved),
-            "moved": bool(moved),
-            "error_move": error_move or "",
-            "active_page": "agenda",
-        },
-    )
-
-
-@app.get("/agenda/visual", response_class=HTMLResponse)
-def agenda_visual_page(
-    request: Request,
-    filtro: str = "todas",
-    fecha: str | None = None,
-    mes: str | None = None,
-    saved: int = 0,
-    moved: int = 0,
-    error_move: str | None = None,
-    forbidden: int = 0,
-) -> HTMLResponse:
-    if redirect := require_admin_access(request):
-        return redirect
-    business = get_business()
-    today = business_today(business)
-    appointments = prepare_appointments(sort_agenda_appointments(list_appointments(DB_PATH), today))
-    active_filter = filtro if filtro in {value for value, _ in AGENDA_FILTERS} else "todas"
-    filtered_appointments = apply_agenda_filter(appointments, active_filter, today)
-    selected_date = parse_optional_date(fecha)
-    fallback_day = selected_date or date.fromisoformat(today)
-    month_anchor = resolve_month_anchor(mes, fallback_day)
-    month_token = month_anchor.strftime("%Y-%m")
-    focus_date = selected_date.isoformat() if selected_date else None
-    current_path = build_agenda_url(
-        filtro=active_filter,
-        selected_date=focus_date,
-        month_token=month_token,
-        route_path="/agenda/visual",
-    )
-    for appointment in filtered_appointments:
-        appointment["reschedule_actions"] = build_quick_reschedule_actions(int(appointment["id"]), current_path)
-    month_overview = build_month_overview(
-        filtered_appointments,
-        month_anchor=month_anchor,
-        active_filter=active_filter,
-        selected_date=focus_date,
-        today=today,
-        route_path="/agenda/visual",
-    )
-    visual_planner = build_visual_planner(
-        filtered_appointments,
-        business=business,
-        active_filter=active_filter,
-        focus_date=focus_date,
-        month_token=month_token,
-        current_path=current_path,
-    )
-    return templates.TemplateResponse(
-        request,
-        "agenda_visual.html",
-        {
-            "business": business,
-            "appointments": filtered_appointments,
-            "today": today,
-            "today_display": format_date_label(today),
-            "summary": appointment_summary(appointments, today),
-            "forbidden": bool(forbidden),
-            "agenda_filters": [
-                {
-                    **link,
-                    "href": build_agenda_url(
-                        filtro=str(link["value"]),
-                        selected_date=focus_date,
-                        month_token=month_token,
-                        route_path="/agenda/visual",
-                    ),
-                }
-                for link in agenda_filter_links(active_filter, route_path="/agenda/visual")
-            ],
-            "agenda_views": agenda_view_links(
-                active_view="visual",
-                active_filter=active_filter,
-                selected_date=focus_date,
-                month_token=month_token,
-            ),
-            "active_filter": active_filter,
-            "current_path": current_path,
-            "operational_focus": build_agenda_operational_focus(
-                filtered_appointments,
-                today=today,
-                focus_date=focus_date,
-                current_path=current_path,
-            ),
-            "focus_date": focus_date,
-            "focus_date_display": format_date_label(focus_date) if focus_date else "",
-            "month_overview": month_overview,
-            "visual_planner": visual_planner,
-            "saved": bool(saved),
-            "moved": bool(moved),
-            "error_move": error_move or "",
-            "active_page": "agenda",
-        },
-    )
-
-
-@app.post("/citas/{appointment_id}/estado", response_model=None)
-async def change_appointment_status(request: Request, appointment_id: int, estado: str, return_to: str | None = None) -> RedirectResponse | HTMLResponse:
-    if redirect := require_admin_access(request):
-        return redirect
-    data = await read_form_data(request)
-    if invalid := csrf_failed(request, data.get("csrf_token")):
-        return invalid
-    if not update_appointment_status(DB_PATH, appointment_id, estado):
-        raise HTTPException(status_code=400, detail="Estado de cita no válido")
-    return RedirectResponse(normalize_return_to(return_to), status_code=303)
-
-
-@app.post("/citas/{appointment_id}/reprogramar", response_model=None)
-async def quick_reschedule_appointment(
-    request: Request,
-    appointment_id: int,
-    move: str,
-    return_to: str | None = None,
-) -> RedirectResponse | HTMLResponse:
-    if redirect := require_admin_access(request):
-        return redirect
-    data = await read_form_data(request)
-    if invalid := csrf_failed(request, data.get("csrf_token")):
-        return invalid
-
-    appointment = get_appointment(DB_PATH, appointment_id)
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Cita no encontrada")
-
-    try:
-        base_dt = datetime.fromisoformat(f"{appointment['fecha']}T{appointment['hora']}")
-    except (KeyError, TypeError, ValueError):
-        target = normalize_return_to(return_to)
-        separator = "&" if "?" in target else "?"
-        return RedirectResponse(
-            f"{target}{separator}error_move=No+he+podido+reprogramar+esa+cita.",
-            status_code=303,
-        )
-
-    delta_by_move = {
-        "30m": timedelta(minutes=30),
-        "1h": timedelta(hours=1),
-        "1d": timedelta(days=1),
-        "7d": timedelta(days=7),
-    }
-    delta = delta_by_move.get(move)
-    if not delta:
-        raise HTTPException(status_code=400, detail="Movimiento no válido")
-
-    target_dt = base_dt + delta
-    try:
-        update_customer_appointment(
-            DB_PATH,
-            business=get_business(),
-            appointment_id=appointment_id,
-            date=target_dt.date().isoformat(),
-            time=target_dt.strftime("%H:%M"),
-            service_id=str(appointment.get("servicio_id") or "") or None,
-            service=str(appointment.get("servicio") or ""),
-            status=str(appointment.get("estado") or "pendiente"),
-            notes=str(appointment.get("notas") or "").strip() or None,
-            part_of_day=str(appointment.get("franja") or "").strip() or None,
-        )
-    except AppointmentServiceError as exc:
-        target = normalize_return_to(return_to)
-        separator = "&" if "?" in target else "?"
-        return RedirectResponse(
-            f"{target}{separator}error_move={quote_plus(exc.message)}",
-            status_code=303,
-        )
-
-    target = normalize_return_to(return_to)
-    separator = "&" if "?" in target else "?"
-    return RedirectResponse(f"{target}{separator}moved=1", status_code=303)
 
 
 @app.get("/clientes", response_class=HTMLResponse)
 def customers_page(request: Request) -> HTMLResponse:
-    if redirect := require_admin_access(request):
+    if redirect := require_panel_access(request):
         return redirect
     return templates.TemplateResponse(
         request,
@@ -389,7 +111,7 @@ def customers_page(request: Request) -> HTMLResponse:
 
 @app.get("/clientes/{customer_id}", response_class=HTMLResponse)
 def customer_detail_page(request: Request, customer_id: int, saved: int = 0, updated: int = 0) -> HTMLResponse:
-    if redirect := require_admin_access(request):
+    if redirect := require_panel_access(request):
         return redirect
     customer = get_customer(DB_PATH, customer_id)
     if not customer:
@@ -427,7 +149,7 @@ def customer_detail_page(request: Request, customer_id: int, saved: int = 0, upd
 
 @app.get("/clientes/{customer_id}/editar", response_class=HTMLResponse)
 def edit_customer_page(request: Request, customer_id: int) -> HTMLResponse:
-    if redirect := require_admin_access(request):
+    if redirect := require_panel_access(request):
         return redirect
     business = get_business()
     customer = get_customer(DB_PATH, customer_id)
@@ -459,7 +181,7 @@ def edit_customer_page(request: Request, customer_id: int) -> HTMLResponse:
 
 @app.post("/clientes/{customer_id}/editar", response_class=HTMLResponse, response_model=None)
 async def save_customer_edit(request: Request, customer_id: int) -> HTMLResponse | RedirectResponse:
-    if redirect := require_admin_access(request):
+    if redirect := require_panel_access(request):
         return redirect
     business = get_business()
     customer = get_customer(DB_PATH, customer_id)
@@ -970,7 +692,7 @@ def new_appointment_page(
     hora: str | None = None,
     repeat_from: str | None = None,
 ) -> HTMLResponse:
-    if redirect := require_admin_access(request):
+    if redirect := require_panel_access(request):
         return redirect
     business = get_business()
     customers = prepare_customers(list_customers(DB_PATH))
@@ -1030,7 +752,7 @@ def new_appointment_page(
 
 @app.post("/citas/nueva", response_class=HTMLResponse, response_model=None)
 async def create_manual_appointment(request: Request) -> HTMLResponse | RedirectResponse:
-    if redirect := require_admin_access(request):
+    if redirect := require_panel_access(request):
         return redirect
     business = get_business()
     data = await read_form_data(request)
@@ -1232,7 +954,7 @@ def edit_appointment_page(
     appointment_id: int,
     return_to: str | None = None,
 ) -> HTMLResponse:
-    if redirect := require_admin_access(request):
+    if redirect := require_panel_access(request):
         return redirect
     business = get_business()
     appointment = get_appointment(DB_PATH, appointment_id)
@@ -1281,7 +1003,7 @@ async def save_appointment_edit(
     request: Request,
     appointment_id: int,
 ) -> HTMLResponse | RedirectResponse:
-    if redirect := require_admin_access(request):
+    if redirect := require_panel_access(request):
         return redirect
     business = get_business()
     appointment = get_appointment(DB_PATH, appointment_id)

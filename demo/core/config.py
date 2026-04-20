@@ -62,6 +62,15 @@ def load_auth_overrides(db_path: Path) -> dict[str, Any]:
         return {}
 
 
+def initialize_business_runtime_data(path: Path, db_path: Path) -> None:
+    with path.open("r", encoding="utf-8") as file:
+        config = json.load(file)
+
+    timezone = str(config.get("timezone") or "Atlantic/Canary")
+    seed_operational_data(db_path, config, timezone=timezone)
+    backfill_appointment_service_ids(db_path)
+
+
 def hash_admin_password(password: str, *, iterations: int = 240000) -> str:
     salt = token_hex(16)
     derived = pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations)
@@ -166,8 +175,6 @@ def load_business_config(path: Path, db_path: Path | None = None) -> dict[str, A
     if not db_path:
         return config
 
-    seed_operational_data(db_path, config, timezone=config.get("timezone", "Atlantic/Canary"))
-    backfill_appointment_service_ids(db_path)
     categories = list_service_categories(db_path)
     services = list_services_config(db_path, active_only=True)
     staff = list_staff_members(db_path, active_only=True)
@@ -195,16 +202,16 @@ def load_auth_config(path: Path, db_path: Path | None = None) -> dict[str, Any]:
         config = json.load(file)
 
     raw_auth = dict(config.get("auth", {}))
-    environment_overrides_admin = any(
-        name in os.environ for name in ("APP_ADMIN_USERNAME", "APP_ADMIN_PASSWORD")
-    )
+    has_env_admin_username = "APP_ADMIN_USERNAME" in os.environ
+    has_env_admin_password = "APP_ADMIN_PASSWORD" in os.environ
+    environment_overrides_admin = has_env_admin_username and has_env_admin_password
     auth_overrides = load_auth_overrides(db_path) if db_path and not environment_overrides_admin else {}
 
     default_username = auth_overrides.get("admin_username", raw_auth.get("admin_username", "admin"))
     default_password = auth_overrides.get("admin_password_hash", raw_auth.get("admin_password", "local-dev-change-me"))
 
-    username = os.getenv("APP_ADMIN_USERNAME", default_username)
-    password = os.getenv("APP_ADMIN_PASSWORD", default_password)
+    username = os.getenv("APP_ADMIN_USERNAME") if environment_overrides_admin else default_username
+    password = os.getenv("APP_ADMIN_PASSWORD") if environment_overrides_admin else default_password
     session_secret = os.getenv("APP_SESSION_SECRET", raw_auth.get("session_secret", "local-dev-session-secret-change-me"))
     session_cookie = os.getenv("APP_SESSION_COOKIE", raw_auth.get("session_cookie", "nova_panel_session"))
     if environment_overrides_admin:

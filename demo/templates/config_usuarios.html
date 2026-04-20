@@ -23,6 +23,12 @@
       {% if saved %}
         <div class="notice">Usuario guardado correctamente.</div>
       {% endif %}
+      {% if active_admins == 0 %}
+        <div class="notice notice-error">Ahora mismo no hay ningún admin interno activo. Conviene crear uno para el uso diario del panel.</div>
+      {% endif %}
+      {% if bootstrap_conflict %}
+        <div class="notice notice-error">Hay un usuario interno con el mismo nombre que el acceso admin actual (`{{ bootstrap_username }}`). Conviene renombrarlo para evitar ambigüedad.</div>
+      {% endif %}
 
       <section class="table-panel">
         <div class="section-heading">
@@ -65,6 +71,7 @@
         {% else %}
           <p class="muted">Todavía no hay usuarios internos. Puedes seguir entrando con el acceso admin y crear aquí el primer usuario de trabajo diario.</p>
         {% endif %}
+        <p class="muted">Regla práctica: conviene mantener al menos un admin interno activo y reservar `{{ bootstrap_username }}` para el acceso bootstrap actual.</p>
       </section>
     </main>
   </body>

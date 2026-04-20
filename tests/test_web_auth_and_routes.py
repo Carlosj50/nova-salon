@@ -94,6 +94,19 @@ class WebAuthAndRoutesTests(DemoTestCase):
         self.assertIn("/login?next=%2Fagenda", response.headers["location"])
 
     def test_staff_user_can_access_operational_pages_but_not_admin_areas(self) -> None:
+        created = create_customer_appointment(
+            self.db_path,
+            business=self.business,
+            customer_name="Lucía",
+            customer_phone="600111222",
+            date="2099-04-20",
+            time="10:00",
+            service_id="corte_caballero",
+            service="Corte caballero",
+            status="confirmada",
+        )
+        appointment_id = int(created["appointment"]["id"])
+        customer_id = int(created["customer"]["id"])
         create_internal_user(
             self.db_path,
             username="maria",
@@ -109,6 +122,18 @@ class WebAuthAndRoutesTests(DemoTestCase):
         customers = self.client.get("/clientes")
         self.assertEqual(customers.status_code, 200)
         self.assertIn("Clientes", customers.text)
+
+        customer_detail = self.client.get(f"/clientes/{customer_id}")
+        self.assertEqual(customer_detail.status_code, 200)
+        self.assertIn("Lucía", customer_detail.text)
+
+        new_appointment = self.client.get("/citas/nueva")
+        self.assertEqual(new_appointment.status_code, 200)
+        self.assertIn("Nueva cita", new_appointment.text)
+
+        edit_appointment = self.client.get(f"/citas/{appointment_id}/editar")
+        self.assertEqual(edit_appointment.status_code, 200)
+        self.assertIn("Editar cita", edit_appointment.text)
 
         config = self.client.get("/config", follow_redirects=False)
         self.assertEqual(config.status_code, 303)
@@ -571,12 +596,25 @@ class WebAuthAndRoutesTests(DemoTestCase):
 
     def test_access_config_is_blocked_when_admin_environment_override_is_active(self) -> None:
         self.login_admin("/config/acceso")
-        with patch.dict(os.environ, {"APP_ADMIN_USERNAME": "env-admin"}, clear=False):
+        with patch.dict(
+            os.environ,
+            {
+                "APP_ADMIN_USERNAME": "env-admin",
+                "APP_ADMIN_PASSWORD": "env-pass-123",
+            },
+            clear=False,
+        ):
             response = self.client.get("/config/acceso")
             self.assertEqual(response.status_code, 200)
             self.assertIn("gestionado por variables de entorno", response.text)
 
     def test_admin_can_create_internal_staff_user_from_panel(self) -> None:
+        create_internal_user(
+            self.db_path,
+            username="encargada",
+            password="clave-admin-123",
+            role="admin",
+        )
         self.login_admin("/config/usuarios/nuevo")
         csrf_token = self.get_csrf_token("/config/usuarios/nuevo")
 
@@ -597,3 +635,86 @@ class WebAuthAndRoutesTests(DemoTestCase):
 
         self.client.get("/logout", follow_redirects=False)
         self.login_user("recepcion", "clave-staff-123", "/agenda")
+
+    def test_cannot_deactivate_last_active_internal_admin(self) -> None:
+        admin_user = create_internal_user(
+            self.db_path,
+            username="encargada",
+            password="clave-admin-123",
+            role="admin",
+        )
+        self.login_admin(f"/config/usuarios/{int(admin_user['id'])}/editar")
+        csrf_token = self.get_csrf_token(f"/config/usuarios/{int(admin_user['id'])}/editar")
+
+        response = self.client.post(
+            f"/config/usuarios/{int(admin_user['id'])}/editar",
+            data={
+                "csrf_token": csrf_token,
+                "username": "encargada",
+                "role": "admin",
+                "new_password": "",
+                "confirm_password": "",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("al menos un admin interno activo", response.text)
+
+    def test_cannot_change_last_active_internal_admin_to_staff(self) -> None:
+        admin_user = create_internal_user(
+            self.db_path,
+            username="encargada",
+            password="clave-admin-123",
+            role="admin",
+        )
+        self.login_admin(f"/config/usuarios/{int(admin_user['id'])}/editar")
+        csrf_token = self.get_csrf_token(f"/config/usuarios/{int(admin_user['id'])}/editar")
+
+        response = self.client.post(
+            f"/config/usuarios/{int(admin_user['id'])}/editar",
+            data={
+                "csrf_token": csrf_token,
+                "username": "encargada",
+                "role": "staff",
+                "active": "on",
+                "new_password": "",
+                "confirm_password": "",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("al menos un admin interno activo", response.text)
+
+    def test_first_internal_user_must_be_active_admin(self) -> None:
+        self.login_admin("/config/usuarios/nuevo")
+        csrf_token = self.get_csrf_token("/config/usuarios/nuevo")
+
+        response = self.client.post(
+            "/config/usuarios/nuevo",
+            data={
+                "csrf_token": csrf_token,
+                "username": "recepcion",
+                "role": "staff",
+                "active": "on",
+                "new_password": "clave-staff-123",
+                "confirm_password": "clave-staff-123",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("al menos un admin interno activo", response.text)
+
+    def test_cannot_use_bootstrap_username_for_internal_user(self) -> None:
+        self.login_admin("/config/usuarios/nuevo")
+        csrf_token = self.get_csrf_token("/config/usuarios/nuevo")
+
+        response = self.client.post(
+            "/config/usuarios/nuevo",
+            data={
+                "csrf_token": csrf_token,
+                "username": self.auth["admin_username"],
+                "role": "admin",
+                "active": "on",
+                "new_password": "clave-admin-123",
+                "confirm_password": "clave-admin-123",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("reservado por el acceso admin actual", response.text)

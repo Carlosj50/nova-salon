@@ -2,6 +2,7 @@
 
 La arquitectura funcional del sistema está documentada en `docs/ARQUITECTURA_FUNCIONAL.md`.
 La configuración de canales está documentada en `docs/CANALES_Y_WHATSAPP.md`.
+La guia visual de uso pensada para salon real está en `docs/GUIA_VISUAL_USO.md`.
 
 ## Qué cambia en esta versión
 
@@ -14,7 +15,7 @@ Ahora el sistema:
 - Protege el panel interno con login simple y sesión por cookie.
 - Reúne la configuración útil del negocio en un centro simple en `/config`.
 - Permite editar datos básicos del negocio desde `/config/negocio`.
-- Permite cambiar el usuario admin y la contraseña del panel desde `/config/acceso` cuando el acceso no está fijado por entorno.
+- Permite cambiar el usuario admin y la contraseña del panel desde `/config/acceso` cuando el acceso bootstrap no está fijado por entorno.
 - Permite gestionar usuarios internos simples con rol `admin` o `staff` desde `/config/usuarios`.
 - Detecta intención de cita.
 - Pide fecha/hora o franja, teléfono, nombre si hace falta y servicio.
@@ -44,9 +45,12 @@ Además, la estructura interna queda algo más ordenada sin cambiar comportamien
 
 - `demo/app.py` mantiene el wiring principal y las rutas internas más operativas.
 - `demo/web/context.py` agrupa auth simple, carga de negocio y estado web reutilizable.
+- `demo/web/routes_agenda.py` agrupa agenda lista, agenda visual y acciones rápidas de agenda.
 - `demo/web/routes_public.py` agrupa login, logout, chat público y healthcheck.
-- `demo/web/routes_config.py` agrupa configuración del negocio y del canal WhatsApp.
+- `demo/web/routes_config.py` agrupa configuración del negocio, acceso, usuarios y canal WhatsApp.
 - `demo/web/view_helpers.py` agrupa helpers de agenda, calendario y formularios.
+- `demo/core/config.py` separa la inicialización operativa de la lectura normal de configuración.
+- La autorización interna ya no descansa tanto en prefijos globales: las rutas protegidas principales declaran si piden acceso operativo o admin.
 - `demo/core/bot_logic.py` sigue orquestando el chat, pero parte del peso se reparte en:
   - `demo/core/chat_booking.py`
   - `demo/core/chat_state.py`
@@ -230,7 +234,12 @@ La red de seguridad ya protege mejor lo delicado, pero todavía quedan huecos ra
 
 ## Cómo se inicializa la base
 
-No hay comando manual. Al importar la app, `demo/app.py` llama a `init_db()` y crea `demo/data/negocio.db` si no existe.
+No hay comando manual. Al arrancar la app, `demo/app.py` hace dos pasos explícitos:
+
+1. `init_db()` crea estructura si no existe
+2. `initialize_business_runtime_data()` siembra catálogo, personal base y backfill operativo
+
+Después, la carga normal de negocio se hace con lectura sin escritura lateral.
 
 Para resetear la demo:
 
@@ -294,7 +303,7 @@ La demo admite configuración por variables de entorno:
 
 Como base rápida de desarrollo puedes copiar `.env.example` a `.env` y ajustar ahí las credenciales locales.
 
-Si `APP_ADMIN_USERNAME` o `APP_ADMIN_PASSWORD` están definidos en entorno, ese acceso bootstrap manda sobre el panel y la pantalla `/config/acceso` queda en solo lectura para evitar choques entre UI y configuración externa.
+Si `APP_ADMIN_USERNAME` y `APP_ADMIN_PASSWORD` están definidos a la vez en entorno, ese acceso bootstrap manda sobre el panel y la pantalla `/config/acceso` queda en solo lectura para evitar choques entre UI y configuración externa. Si falta una de las dos, el override parcial se ignora.
 
 En `demo/data/negocio.json` solo quedan valores locales y ficticios:
 
@@ -422,6 +431,12 @@ Roles:
 - `/personal`
 - `/config/acceso`
 - `/config/usuarios`
+
+Blindajes básicos del panel de usuarios:
+
+- no deja degradar o desactivar el último admin interno activo
+- reserva el username del acceso bootstrap actual para evitar colisiones evidentes
+- si aún no hay admins internos activos, obliga a crear primero uno de ese tipo
 
 ## Selección de servicios
 

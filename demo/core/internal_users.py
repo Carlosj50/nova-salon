@@ -35,6 +35,23 @@ def list_internal_users(db_path: Path) -> list[dict[str, Any]]:
     return [_user_from_row(dict(row)) for row in rows]
 
 
+def count_internal_users_by_role(db_path: Path, role: str, *, active_only: bool = False) -> int:
+    clean_role = str(role or "").strip().lower()
+    if clean_role not in VALID_USER_ROLES:
+        raise ValueError("invalid_role")
+    query = """
+        SELECT COUNT(*) AS total
+        FROM internal_users
+        WHERE role = ?
+    """
+    params: list[Any] = [clean_role]
+    if active_only:
+        query += " AND active = 1"
+    with connection_scope(db_path) as connection:
+        row = connection.execute(query, tuple(params)).fetchone()
+    return int(row["total"] if row else 0)
+
+
 def get_internal_user(db_path: Path, user_id: int) -> dict[str, Any] | None:
     with connection_scope(db_path) as connection:
         row = connection.execute(

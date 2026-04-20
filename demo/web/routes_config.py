@@ -19,6 +19,7 @@ from ..core.config import (
 )
 from ..core.internal_users import (
     VALID_USER_ROLES,
+    count_internal_users_by_role,
     create_internal_user,
     get_internal_user,
     get_internal_user_by_username,
@@ -80,12 +81,18 @@ def user_panel_context(
     *,
     business: dict[str, Any],
     users: list[dict[str, Any]],
+    bootstrap_username: str,
+    active_admins: int,
+    bootstrap_conflict: bool,
     saved: bool = False,
 ) -> dict[str, Any]:
     return {
         "request": request,
         "business": business,
         "users": users,
+        "bootstrap_username": bootstrap_username,
+        "active_admins": active_admins,
+        "bootstrap_conflict": bootstrap_conflict,
         "saved": saved,
         "active_page": "config",
         "config_section": "users",
@@ -97,6 +104,8 @@ def user_form_panel_context(
     *,
     business: dict[str, Any],
     form_data: dict[str, str],
+    bootstrap_username: str,
+    active_admins: int,
     mode: str,
     form_action: str,
     page_title: str,
@@ -108,6 +117,8 @@ def user_form_panel_context(
         "request": request,
         "business": business,
         "form_data": form_data,
+        "bootstrap_username": bootstrap_username,
+        "active_admins": active_admins,
         "mode": mode,
         "form_action": form_action,
         "page_title": page_title,
@@ -200,7 +211,13 @@ def users_config_page(request: Request, saved: int = 0) -> HTMLResponse:
     if redirect := web_context.require_admin_access(request):
         return redirect
     business = web_context.get_business()
+    auth_settings = web_context.get_auth_settings()
     users = list_internal_users(web_context.DB_PATH)
+    bootstrap_username = str(auth_settings.get("admin_username") or "").strip()
+    active_admins = count_internal_users_by_role(web_context.DB_PATH, "admin", active_only=True)
+    bootstrap_conflict = bool(
+        bootstrap_username and get_internal_user_by_username(web_context.DB_PATH, bootstrap_username)
+    )
     return web_context.templates.TemplateResponse(
         request,
         "config_usuarios.html",
@@ -208,6 +225,9 @@ def users_config_page(request: Request, saved: int = 0) -> HTMLResponse:
             request,
             business=business,
             users=users,
+            bootstrap_username=bootstrap_username,
+            active_admins=active_admins,
+            bootstrap_conflict=bootstrap_conflict,
             saved=bool(saved),
         ),
     )
@@ -217,6 +237,8 @@ def users_config_page(request: Request, saved: int = 0) -> HTMLResponse:
 def new_user_config_page(request: Request) -> HTMLResponse:
     if redirect := web_context.require_admin_access(request):
         return redirect
+    auth_settings = web_context.get_auth_settings()
+    active_admins = count_internal_users_by_role(web_context.DB_PATH, "admin", active_only=True)
     return web_context.templates.TemplateResponse(
         request,
         "config_usuario_form.html",
@@ -225,11 +247,13 @@ def new_user_config_page(request: Request) -> HTMLResponse:
             business=web_context.get_business(),
             form_data={
                 "username": "",
-                "role": "staff",
+                "role": "admin" if active_admins == 0 else "staff",
                 "active": "on",
                 "new_password": "",
                 "confirm_password": "",
             },
+            bootstrap_username=str(auth_settings.get("admin_username") or "").strip(),
+            active_admins=active_admins,
             mode="create",
             form_action="/config/usuarios/nuevo",
             page_title="Nuevo usuario",
@@ -248,6 +272,7 @@ async def create_user_config_page(request: Request) -> HTMLResponse | RedirectRe
         return invalid
     business = web_context.get_business()
     auth_settings = web_context.get_auth_settings()
+    active_admins = count_internal_users_by_role(web_context.DB_PATH, "admin", active_only=True)
     form_data = {
         "username": str(data.get("username") or "").strip(),
         "role": str(data.get("role") or "staff").strip().lower(),
@@ -264,6 +289,8 @@ async def create_user_config_page(request: Request) -> HTMLResponse | RedirectRe
                 request,
                 business=business,
                 form_data=form_data,
+                bootstrap_username=str(auth_settings.get("admin_username") or "").strip(),
+                active_admins=active_admins,
                 mode="create",
                 form_action="/config/usuarios/nuevo",
                 page_title="Nuevo usuario",
@@ -282,6 +309,8 @@ async def create_user_config_page(request: Request) -> HTMLResponse | RedirectRe
         return user_response("Elige un rol válido para este usuario.")
     if form_data["username"].lower() == str(auth_settings.get("admin_username") or "").strip().lower():
         return user_response("Ese usuario ya está reservado por el acceso admin actual.")
+    if active_admins == 0 and (form_data["role"] != "admin" or form_data["active"] != "on"):
+        return user_response("Antes de seguir, crea al menos un admin interno activo.")
     if get_internal_user_by_username(web_context.DB_PATH, form_data["username"]):
         return user_response("Ya existe un usuario con ese nombre.")
     if len(new_password) < 8:
@@ -307,6 +336,7 @@ def edit_user_config_page(request: Request, user_id: int) -> HTMLResponse:
     user = get_internal_user(web_context.DB_PATH, user_id)
     if not user:
         return RedirectResponse("/config/usuarios", status_code=303)
+    auth_settings = web_context.get_auth_settings()
     return web_context.templates.TemplateResponse(
         request,
         "config_usuario_form.html",
@@ -320,6 +350,8 @@ def edit_user_config_page(request: Request, user_id: int) -> HTMLResponse:
                 "new_password": "",
                 "confirm_password": "",
             },
+            bootstrap_username=str(auth_settings.get("admin_username") or "").strip(),
+            active_admins=count_internal_users_by_role(web_context.DB_PATH, "admin", active_only=True),
             mode="edit",
             form_action=f"/config/usuarios/{user_id}/editar",
             page_title="Editar usuario",
@@ -341,6 +373,7 @@ async def save_user_config_page(request: Request, user_id: int) -> HTMLResponse 
         return invalid
     business = web_context.get_business()
     auth_settings = web_context.get_auth_settings()
+    active_admins = count_internal_users_by_role(web_context.DB_PATH, "admin", active_only=True)
     form_data = {
         "username": str(data.get("username") or "").strip(),
         "role": str(data.get("role") or "staff").strip().lower(),
@@ -357,6 +390,8 @@ async def save_user_config_page(request: Request, user_id: int) -> HTMLResponse 
                 request,
                 business=business,
                 form_data=form_data,
+                bootstrap_username=str(auth_settings.get("admin_username") or "").strip(),
+                active_admins=active_admins,
                 mode="edit",
                 form_action=f"/config/usuarios/{user_id}/editar",
                 page_title="Editar usuario",
@@ -378,6 +413,10 @@ async def save_user_config_page(request: Request, user_id: int) -> HTMLResponse 
     existing = get_internal_user_by_username(web_context.DB_PATH, form_data["username"])
     if existing and int(existing["id"]) != user_id:
         return user_response("Ya existe otro usuario con ese nombre.")
+    is_current_active_admin = bool(user.get("active")) and str(user.get("role")) == "admin"
+    will_remain_active_admin = form_data["active"] == "on" and form_data["role"] == "admin"
+    if is_current_active_admin and not will_remain_active_admin and active_admins <= 1:
+        return user_response("Necesitas mantener al menos un admin interno activo.")
     if (new_password or confirm_password) and len(new_password) < 8:
         return user_response("La nueva contraseña debe tener al menos 8 caracteres.")
     if (new_password or confirm_password) and new_password != confirm_password:

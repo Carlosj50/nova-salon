@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from demo.core.config import load_business_config
+from demo.core.config import initialize_business_runtime_data, load_business_config
 from demo.core.db import init_db
 
 
@@ -16,6 +16,7 @@ class DemoTestCase(unittest.TestCase):
         self._tmpdir = TemporaryDirectory()
         self.db_path = Path(self._tmpdir.name) / "negocio.db"
         init_db(self.db_path)
+        initialize_business_runtime_data(CONFIG_PATH, self.db_path)
         self.business = load_business_config(CONFIG_PATH, self.db_path)
 
     def tearDown(self) -> None:
